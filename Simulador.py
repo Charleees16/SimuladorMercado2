@@ -1,9 +1,42 @@
 import streamlit as st
 import pandas as pd
 
-# streamlit run Simulador.py
+# streamlit run SimuladorEquipos.py
 
 st.set_page_config(page_title="Simulador Mercado Eléctrico", layout="wide")
+
+# --- NUEVO: FUNCIÓN PARA LA VENTANA EMERGENTE (MODAL) ---
+@st.dialog("📊 Ficha Técnica de las Centrales", width="large")
+def mostrar_ficha_tecnica():
+    st.markdown("Consulta aquí los parámetros de tu equipo:")
+    
+    # Recuperamos los textos originales más largos para que se vea perfecto en grande
+    datos_tecnicos = {
+        "Parámetro": [
+            "Potencia Máx. (MW)",
+            "Cambio Máx. por Hora (MW)",
+            "Coste Operativo (€/MWh)",
+            "Coste por Cambio (€/MW)",
+            "Coste Parada/Arranque (€)"
+        ]
+    }
+    
+    for tech, info in st.session_state.TECNOLOGIAS.items():
+        datos_tecnicos[tech] = [
+            f"{info['pot_max']:,.0f}",
+            f"{info['max_cambio']:,.0f}" if info['max_cambio'] < info['pot_max'] else "Sin límite",
+            f"{info['coste_op']:,.2f}",
+            f"{info['coste_cambio']:,.0f}",
+            f"{info['coste_pa']:,.0f}"
+        ]
+    
+    df_tecnico = pd.DataFrame(datos_tecnicos)
+    styled_df_tec = df_tecnico.style.apply(
+        lambda x: ['font-weight: bold; border-right: 2px solid #9ca3af;' if x.name == 'Parámetro' else '' for _ in x]
+    )
+    
+    st.dataframe(styled_df_tec, hide_index=True, use_container_width=True)
+# ---------------------------------------------------------
 
 # --- PANTALLA DE INICIO Y CONFIGURACIÓN ---
 if 'juego_iniciado' not in st.session_state:
@@ -31,9 +64,9 @@ if not st.session_state.juego_iniciado:
         
         st.session_state.TECNOLOGIAS = {
             "Nuclear": {"pot_max": int(970 * factor), "coste_op": 8.0, "max_cambio": int(100 * factor), "coste_cambio": 70, "coste_pa": 150000},
-            "Carbón (Coal PP)": {"pot_max": int(830 * factor), "coste_op": 86.0, "max_cambio": int(200 * factor), "coste_cambio": 50, "coste_pa": 70000},
-            "Ciclo Combinado (GTCC)": {"pot_max": int(800 * factor), "coste_op": 121.0, "max_cambio": int(400 * factor), "coste_cambio": 30, "coste_pa": 10000},
-            "Gas Engine": {"pot_max": int(500 * factor), "coste_op": 168.0, "max_cambio": int(500 * factor), "coste_cambio": 0, "coste_pa": 0}
+            "Carbón": {"pot_max": int(830 * factor), "coste_op": 86.0, "max_cambio": int(200 * factor), "coste_cambio": 50, "coste_pa": 70000},
+            "Ciclo Combinado": {"pot_max": int(800 * factor), "coste_op": 121.0, "max_cambio": int(400 * factor), "coste_cambio": 30, "coste_pa": 10000},
+            "Gas": {"pot_max": int(500 * factor), "coste_op": 168.0, "max_cambio": int(500 * factor), "coste_cambio": 0, "coste_pa": 0}
         }
         
         # Inicializar equipos en base al número elegido
@@ -110,16 +143,23 @@ datos_hora = HORARIOS[ronda]
 hora_str = datos_hora["hora"]
 demanda_residual = datos_hora["demanda"] - datos_hora["renovables"]
 
-# --- PANEL SUPERIOR ---
+# --- PANEL SUPERIOR (BARRA LATERAL) ---
 st.sidebar.header(f"🕒 HORA ACTUAL: {hora_str}")
 st.sidebar.progress((ronda + 1) / len(HORARIOS), text=f"Ronda {ronda + 1} de {len(HORARIOS)}")
 st.sidebar.info(f"**Demanda Total:** {datos_hora['demanda']} MW\n\n**Renovables:** -{datos_hora['renovables']} MW\n\n---\n**🏭 DEMANDA A CUBRIR:** {demanda_residual} MW")
+
+st.sidebar.divider()
+
+# --- BOTÓN QUE ABRE LA VENTANA EMERGENTE ---
+if st.sidebar.button("🔍 Abrir Ficha Técnica", type="primary", use_container_width=True):
+    mostrar_ficha_tecnica()
 
 # --- INTERFAZ DE OFERTAS ---
 st.subheader(f"📝 Ofertas para el tramo {hora_str}")
 
 tabs = st.tabs(st.session_state.equipos_nombres)
 ofertas = []
+
 
 for i, tab in enumerate(tabs):
     equipo = st.session_state.equipos_nombres[i]
@@ -212,53 +252,94 @@ with col_btn1:
             total_asignado = df["Potencia Asignada (MW)"].sum()
             hubo_apagon = total_asignado < demanda_residual
 
-            for index, row in df.iterrows():
-                clave = f"{row['Equipo']}_{row['Tecnología']}"
-                st.session_state.potencia_asignada_anterior[clave] = row["Potencia Asignada (MW)"]
-                st.session_state.dinero_acumulado[row['Equipo']] += row["Beneficio Neto (€)"]
-                st.session_state.energia_acumulada[row['Equipo']][row['Tecnología']] += row["Potencia Asignada (MW)"]
-
             if hubo_apagon:
                 st.session_state.hubo_apagon = True
-                for eq in st.session_state.dinero_acumulado.keys():
-                    multa = abs(st.session_state.dinero_acumulado[eq]) * 0.33
-                    st.session_state.penalizacion_apagon[eq] = multa
-                    st.session_state.dinero_acumulado[eq] -= multa
+                # IMPORTANTE: No actualizamos el dinero ni la energía porque la ronda es nula
             else:
                 st.session_state.hubo_apagon = False
-                st.session_state.penalizacion_apagon = {}
-            
+                # Solo guardamos saldos e historial si el mercado casa con éxito
+                for index, row in df.iterrows():
+                    clave = f"{row['Equipo']}_{row['Tecnología']}"
+                    st.session_state.potencia_asignada_anterior[clave] = row["Potencia Asignada (MW)"]
+                    st.session_state.dinero_acumulado[row['Equipo']] += row["Beneficio Neto (€)"]
+                    st.session_state.energia_acumulada[row['Equipo']][row['Tecnología']] += row["Potencia Asignada (MW)"]
+
             st.session_state.mercado_casado = True
             st.session_state.resultados_df = df
             st.session_state.precio_marginal = precio_marginal
             st.rerun()
 
 with col_btn2:
-    if st.session_state.mercado_casado:
+    # Solo mostramos el botón de avanzar hora si el mercado se casó Y NO hubo apagón
+    if st.session_state.mercado_casado and not st.session_state.hubo_apagon:
         if st.button("⏭️ Siguiente Hora", type="primary"):
             st.session_state.ronda_actual += 1
             st.session_state.mercado_casado = False
             st.session_state.hubo_apagon = False
-            st.session_state.penalizacion_apagon = {}
             st.rerun()
 
 # --- MOSTRAR RESULTADOS ---
 if st.session_state.mercado_casado:
     
+    # --- LÓGICA DE APAGÓN ---
     if st.session_state.hubo_apagon:
-        st.error("### 🌑⚠️ ¡APAGÓN GENERAL! ⚠️🌑\n**No se ha conseguido cubrir la demanda residual. El sistema eléctrico ha colapsado y todos los jugadores han sido penalizados perdiendo un 33% de su saldo actual.**")
+        st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
+        
+        potencia_ofertada_total = st.session_state.resultados_df['Potencia Ofertada (MW)'].sum()
+        
+        st.error(f"""
+        ### **Red Eléctrica de España (REE) INFORMA:**
+        No se ha logrado cubrir la demanda residual de **{demanda_residual} MW** (Solo se han ofertado {potencia_ofertada_total} MW en total).
+        
+        El sistema eléctrico está al borde del colapso. El mercado ha sido anulado. **Estáis obligados a rehacer las ofertas para esta misma hora.**
+        """)
+        
+        if st.button("🔄 Rehacer Ofertas para esta hora", type="primary", use_container_width=True):
+            st.session_state.mercado_casado = False
+            st.session_state.hubo_apagon = False
+            st.rerun()
+            
+        st.stop() # Detenemos el código aquí para que no muestre las tablas de beneficios ni saldos (ya que la ronda fue nula)
 
+    # --- LÓGICA NORMAL SI NO HAY APAGÓN ---
     st.success(f"### 💰 Precio Final del Mercado: {st.session_state.precio_marginal:,.2f} €/MWh")
     
-    st.subheader("Resumen de la Ronda")
+    st.subheader("Resumen de la Ronda por Equipo")
+
+# --- MOSTRAR RESULTADOS ---
+if st.session_state.mercado_casado:
+    
+    # --- LÓGICA DE APAGÓN ---
+    if st.session_state.hubo_apagon:
+        st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
+        
+        potencia_ofertada_total = st.session_state.resultados_df['Potencia Ofertada (MW)'].sum()
+        
+        st.error(f"""
+        ### **Red Eléctrica de España (REE) INFORMA:**
+        No se ha logrado cubrir la demanda residual de **{demanda_residual} MW** (Solo se han ofertado {potencia_ofertada_total} MW en total).
+        
+        El sistema eléctrico está al borde del colapso. El mercado ha sido anulado. **Estáis obligados a rehacer las ofertas para esta misma hora.**
+        """)
+        
+        # Opcional: Si quieres añadir aquí el mensaje de la multa del 33%, puedes ponerlo así:
+        # st.error("Además, todos los jugadores han sido penalizados perdiendo un 33% de su saldo actual.")
+        
+        if st.button("🔄 Rehacer Ofertas para esta hora", type="primary", use_container_width=True):
+            st.session_state.mercado_casado = False
+            st.session_state.hubo_apagon = False
+            st.rerun()
+            
+        st.stop() # Detenemos el código aquí para que no muestre las tablas de beneficios
+
+    
+    # (A partir de aquí sigue tu código normal con: df_res = st.session_state.resultados_df)
     df_res = st.session_state.resultados_df
     resumen_beneficios = df_res.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
     max_beneficio = resumen_beneficios["Beneficio Neto (€)"].max()
     
-    # Dibujamos dinámicamente las columnas según el número de equipos elegidos
-    cols = st.columns(st.session_state.num_equipos)
-    
-    for i, equipo_nombre in enumerate(st.session_state.equipos_nombres):
+    # Ponemos a cada equipo en formato vertical (uno debajo del otro)
+    for equipo_nombre in st.session_state.equipos_nombres:
         datos_equipo = df_res[df_res["Equipo"] == equipo_nombre]
         beneficio_total = datos_equipo["Beneficio Neto (€)"].sum() if not datos_equipo.empty else 0
         
@@ -267,43 +348,107 @@ if st.session_state.mercado_casado:
         saldo_antes_apagon = saldo_actual + multa_apagon
         saldo_anterior = saldo_antes_apagon - beneficio_total
         
-        with cols[i]:
-            with st.container(border=True):
-                html_content = f"<h3 style='margin-bottom: 5px;'>🛡️ {equipo_nombre}</h3>"
-                html_content += f"<b>🏦 SALDO ANTERIOR:</b> {saldo_anterior:,.0f} €<br><br>"
+        # Contenedor visual para separar cada equipo
+        with st.container(border=True):
+            st.markdown(f"### 🛡️ {equipo_nombre}")
+            
+            # --- CONSTRUCCIÓN DE LA TABLA FIJA (EJES INVERTIDOS Y COLORES) ---
+            tecnologias_orden = ["Nuclear", "Carbón", "Ciclo Combinado", "Gas"]
+            
+            # Diccionario para añadir el emoji a la cabecera sin romper la lógica interna
+            emojis_tech = {
+                "Nuclear": "☢️ Nuclear",
+                "Carbón": "🪨 Carbón ",
+                "Ciclo Combinado": "💨 Ciclo Combinado ",
+                "Gas": "🔥 Gas "
+            }
+            
+            # 1. Definimos las filas (Eje Y)
+            data_dict = {
+                "Concepto": [
+                    "Oferta - Potencia (MW)",
+                    "Oferta - Precio (€/MWh)",
+                    "Vendido - Potencia (MW)",
+                    "Vendido - Precio (€/MWh)",
+                    "Cuentas - Ingresos (€)",
+                    "Cuentas - Costes Op. (€)",
+                    "Cuentas - Penalizaciones (€)",
+                    "Cuentas - Beneficio Neto (€)"
+                ]
+            }
+            
+            # 2. Rellenamos las columnas (Eje X) con los datos de cada tecnología
+            for tech in tecnologias_orden:
+                tech_display = emojis_tech[tech] # Usamos el nombre con emoji para la columna
+                row_data = datos_equipo[datos_equipo["Tecnología"] == tech]
                 
-                for _, row in datos_equipo.iterrows():
-                    if row["Ingresos (€)"] > 0:
-                        html_content += f"<span style='color: #28a745;'>💲 <b>INGRESO {row['Tecnología'].upper()}:</b> ({row['Potencia Asignada (MW)']} MW * {st.session_state.precio_marginal:,.0f} €) = <b>+{row['Ingresos (€)']:,.0f} €</b></span><br>"
-                
-                for _, row in datos_equipo.iterrows():
-                    if row["Costes Op (€)"] > 0:
-                        html_content += f"<span style='color: #fd7e14;'>⛽⚙️ <b>COSTE OP.(Combustible y emisiones) {row['Tecnología'].upper()}:</b> <b>-{row['Costes Op (€)']:,.0f} €</b></span><br>"
-                        
-                for _, row in datos_equipo.iterrows():
-                    if row["Penalización Cambio (€)"] > 0:
-                        html_content += f"<span style='color: #dc3545;'>📉 <b>CAMBIO POTENCIA {row['Tecnología'].upper()}:</b> <b>-{row['Penalización Cambio (€)']:,.0f} €</b></span><br>"
-                    if row["Penalización Parada/Arranque (€)"] > 0:
-                        accion = "ARRANQUE" if row["Potencia Anterior (MW)"] == 0 else "CIERRE"
-                        html_content += f"<span style='color: #dc3545;'>🚨 <b>{accion} DE {row['Tecnología'].upper()}:</b> <b>-{row['Penalización Parada/Arranque (€)']:,.0f} €</b></span><br>"
-                        
-                html_content += "<hr style='margin: 10px 0; border-color: #555;'>"
-                
-                if beneficio_total == max_beneficio and max_beneficio > 0:
-                    arcoiris = "background-image: linear-gradient(to right, #ff3333, #ff9933, #cccc00, #33cc33, #3399ff, #9933ff); -webkit-background-clip: text; color: transparent;"
-                    html_content += f"BENEFICIO RONDA:<span style='{arcoiris} font-size: 1.25em; font-weight: bold;'>  {beneficio_total:,.0f} € </span><br>"
-                else:
-                    html_content += f"<b>📊 BENEFICIO RONDA:</b> {beneficio_total:,.0f} €<br>"
-                
-                if st.session_state.hubo_apagon:
-                    html_content += f"<br><span style='color: #dc3545; font-size: 1.1em; font-weight: bold;'>🌑 MULTA POR APAGÓN (33%): -{multa_apagon:,.0f} €</span><br>"
+                if not row_data.empty:
+                    r = row_data.iloc[0]
+                    penalizaciones = r["Penalización Cambio (€)"] + r["Penalización Parada/Arranque (€)"]
                     
-                html_content += f"<br><span style='color: #FFD700; font-size: 1.5em; font-weight: bold; text-shadow: 1px 1px 2px #000000;'>💵 SALDO ACTUAL: {saldo_actual:,.0f} €</span>"
+                    # Formateamos previamente a texto para que quede limpio en la tabla
+                    data_dict[tech_display] = [
+                        f"{r['Potencia Ofertada (MW)']:,.0f}",
+                        f"{r['Precio (€/MWh)']:,.2f}",
+                        f"{r['Potencia Asignada (MW)']:,.0f}",
+                        f"{st.session_state.precio_marginal:,.2f}" if r["Potencia Asignada (MW)"] > 0 else "0.00",
+                        f"{r['Ingresos (€)']:,.0f}",
+                        f"{r['Costes Op (€)']:,.0f}",
+                        f"{penalizaciones:,.0f}",
+                        f"{r['Beneficio Neto (€)']:,.0f}"
+                    ]
+                else:
+                    # Si estaba apagada, rellenamos con 0
+                    data_dict[tech_display] = ["0", "0.00", "0", "0.00", "0", "0", "0", "0"]
+            
+            # 3. Creamos el DataFrame
+            df_equipo_transposed = pd.DataFrame(data_dict)
+            
+            # 4. Función para aplicar los colores solicitados
+            def aplicar_colores(row):
+                concepto = row['Concepto']
                 
-                st.markdown(html_content, unsafe_allow_html=True)
-
-    # --- TABLA DE DETALLES ---
-    st.divider()
-    with st.expander("Ver tabla de Detalles y Merit Order"):
-        columnas_mostrar = ["Equipo", "Tecnología", "Potencia Ofertada (MW)", "Potencia Asignada (MW)", "Penalización Cambio (€)", "Penalización Parada/Arranque (€)", "Beneficio Neto (€)"]
-        st.dataframe(df_res[columnas_mostrar], use_container_width=True)
+                # Definimos el estilo base según la palabra clave
+                if 'Oferta' in concepto:
+                    # Azul claro para las ofertas
+                    estilo_base = 'background-color: #dbeafe; color: #1e3a8a;' 
+                elif 'Vendido' in concepto or 'Ingresos' in concepto:
+                    # Verde claro para vendido e ingresos
+                    estilo_base = 'background-color: #dcfce7; color: #166534;' 
+                elif 'Costes' in concepto or 'Penalizaciones' in concepto:
+                    # Rojo claro para costes y penalizaciones
+                    estilo_base = 'background-color: #fee2e2; color: #991b1b;' 
+                elif 'Beneficio Neto' in concepto:
+                    # Verde fuerte para el beneficio neto
+                    estilo_base = 'background-color: #16a34a; color: white; font-weight: bold; font-size: 1.05em;' 
+                else:
+                    estilo_base = ''
+                
+                # Replicamos el estilo para todas las columnas de la fila
+                estilos = [estilo_base] * len(row)
+                
+                # Resaltamos de forma especial la columna "Concepto" (índice 0)
+                if estilo_base:
+                    estilos[0] = estilo_base + ' font-weight: 900; border-right: 2px solid #9ca3af;'
+                else:
+                    estilos[0] = 'font-weight: 900; border-right: 2px solid #9ca3af;'
+                    
+                return estilos
+            
+            # 5. Aplicamos el estilo a las celdas
+            styled_df = df_equipo_transposed.style.apply(aplicar_colores, axis=1)
+            
+            # 6. Forzamos la cabecera para que sea NEGRITA y negra
+            styled_df = styled_df.set_table_styles([
+                {'selector': 'th', 'props': [('font-weight', 'bold !important'), ('color', '#000000 !important')]}
+            ])
+            
+            st.dataframe(
+                styled_df,
+                hide_index=True,
+                use_container_width=True
+            )
+            
+            # Mostramos el saldo final al final del contenedor, destacado
+            st.divider()
+            st.markdown(f"<h3 style='text-align: right; color: #1e3a8a;'>💵 SALDO ACTUAL: {saldo_actual:,.0f} €</h3>", unsafe_allow_html=True)
