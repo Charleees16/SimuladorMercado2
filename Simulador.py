@@ -14,236 +14,6 @@ def obtener_base_de_datos():
 
 db = obtener_base_de_datos()
 
-# --- ENRUTADOR MÁGICO ---
-# Leemos si la URL tiene el parámetro "?sala="
-params = st.query_params
-sala_url = params.get("sala", None)
-
-if sala_url:
-    # Si hay "sala" en la URL, el que entra es un JUGADOR (escaneó el QR o usó el enlace)
-    st.session_state.rol = "jugador"
-    st.session_state.sala_activa = sala_url
-else:
-    # Si la URL está limpia, es el HOST (el que abre la app por primera vez)
-    if "rol" not in st.session_state:
-        st.session_state.rol = "host"
-
-# ==========================================
-# 👑 VISTA DEL CREADOR DE LA SALA (HOST)
-# ==========================================
-if st.session_state.rol == "host":
-    
-    # 1. PANTALLA: GENERAR SALA
-    if "sala_activa" not in st.session_state:
-        st.title("⚡ Panel de Control del Mercado")
-        st.info("Bienvenido. Eres el operador del mercado (REE).")
-        
-        col1, col2, col3 = st.columns([1, 2, 1])
-        with col2:
-            if st.button("🏢 Generar Sala", type="primary", use_container_width=True):
-                nuevo_pin = str(random.randint(1000, 9999))
-                db["salas"][nuevo_pin] = {"estado": "esperando", "equipos": []}
-                st.session_state.sala_activa = nuevo_pin
-                st.rerun()
-        st.stop() # Detenemos aquí para que no se vea nada más
-
-    # 2. PANTALLA: LOBBY DE ESPERA (QR)
-    else:
-        sala_id = st.session_state.sala_activa
-        estado_sala = db["salas"][sala_id]["estado"]
-        
-        if estado_sala == "esperando":
-            st.title("⚡ Sala de Espera Activa")
-            
-            # ⚠️ MUY IMPORTANTE PARA PROBAR HOY: 
-            # Cambia esta IP por la "Network URL" que te sale en la terminal al hacer streamlit run.
-            # Ejemplo: "http://192.168.1.35:8501"
-            URL_BASE = "https://simuladormercado2-jyyg36vuwjm4cvjvepsvs9.streamlit.app/" 
-            url_invitacion = f"{URL_BASE}/?sala={sala_id}"
-            
-            col_izq, col_der = st.columns([1, 1])
-            with col_izq:
-                st.markdown("### 📲 ¡Escanea para participar!")
-                st.markdown("O introduce este enlace en tu navegador:")
-                st.code(url_invitacion)
-                
-                equipos_unidos = db["salas"][sala_id]["equipos"]
-                st.markdown(f"### 👥 Empresas registradas: {len(equipos_unidos)}")
-                
-                if len(equipos_unidos) > 0:
-                    nombres_html = " ".join([f"<span style='background-color: #1e3a8a; color: white; padding: 10px; border-radius: 10px; margin: 5px; display: inline-block;'>{eq}</span>" for eq in equipos_unidos])
-                    st.markdown(nombres_html, unsafe_allow_html=True)
-                else:
-                    st.warning("Esperando a que las empresas energéticas se conecten...")
-                
-                st.button("🔄 Actualizar lista")
-                
-            with col_der:
-                # Generamos el QR visual
-                qr = qrcode.make(url_invitacion)
-                st.image(qr.get_image(), width=350)
-            
-            st.divider()
-            
-            if st.button("🚀 Empezar Partida", type="primary", use_container_width=True):
-                if len(equipos_unidos) >= 2:
-                    # El Host arranca la partida
-                    db["salas"][sala_id]["estado"] = "jugando"
-                    num_equipos = len(equipos_unidos)
-                    factor = 4 / num_equipos
-                    
-                    db["salas"][sala_id]["TECNOLOGIAS"] = {
-                        "Nuclear": {"pot_max": int(970 * factor), "coste_op": 8.0, "max_cambio": int(100 * factor), "coste_cambio": 70, "coste_pa": 150000},
-                        "Carbón": {"pot_max": int(830 * factor), "coste_op": 86.0, "max_cambio": int(200 * factor), "coste_cambio": 50, "coste_pa": 70000},
-                        "Ciclo Combinado": {"pot_max": int(800 * factor), "coste_op": 121.0, "max_cambio": int(400 * factor), "coste_cambio": 30, "coste_pa": 10000},
-                        "Gas": {"pot_max": int(500 * factor), "coste_op": 168.0, "max_cambio": int(500 * factor), "coste_cambio": 0, "coste_pa": 0}
-                    }
-                    db["salas"][sala_id]["nombres"] = equipos_unidos
-                    st.rerun()
-                else:
-                    st.error("¡Se necesitan al menos 2 empresas para que haya mercado!")
-            st.stop() # El host se queda aquí hasta que le da a empezar
-
-# ==========================================
-# 📱 VISTA DEL JUGADOR (ESCANEA EL QR)
-# ==========================================
-if st.session_state.rol == "jugador":
-    sala_id = st.session_state.sala_activa
-    
-    if sala_id not in db["salas"]:
-        st.error("❌ Esta sala no existe, el código es incorrecto o la partida ya terminó.")
-        st.stop()
-        
-    estado_sala = db["salas"][sala_id]["estado"]
-    
-    if estado_sala == "esperando":
-        st.title("🏢 Registro de Empresa Energética")
-        
-        if "mi_equipo" not in st.session_state:
-            st.info(f"Te vas a unir a la sala: **{sala_id}**")
-            nombre_equipo = st.text_input("¿Cuál es el nombre de tu empresa energética?")
-            
-            if st.button("Aceptar", type="primary"):
-                if nombre_equipo:
-                    if nombre_equipo in db["salas"][sala_id]["equipos"]:
-                        st.error("Ese nombre ya está en uso en esta sala. Elige otro.")
-                    else:
-                        db["salas"][sala_id]["equipos"].append(nombre_equipo)
-                        st.session_state.mi_equipo = nombre_equipo
-                        st.rerun()
-                else:
-                    st.warning("Por favor, introduce un nombre para tu empresa.")
-        else:
-            st.success(f"✅ ¡Tu empresa **{st.session_state.mi_equipo}** se ha registrado con éxito!")
-            st.info("👀 Mira a la pantalla principal. La jornada de mercado empezará cuando el host le dé al botón.")
-            st.button("🔄 Comprobar si ha empezado")
-        st.stop() # El jugador se queda aquí hasta que el host cambia el estado a "jugando"
-        
-    elif estado_sala == "jugando" and "mi_equipo" not in st.session_state:
-        st.error("La partida ya ha empezado y no te registraste a tiempo. 😢")
-        st.stop()
-
-
-# ==========================================
-# ⚙️ INICIALIZACIÓN CUANDO LA PARTIDA EMPIEZA
-# ==========================================
-# Si el código llega hasta aquí, es porque db["salas"][sala_id]["estado"] == "jugando" 
-# (Y el st.stop() ya no frena la ejecución)
-
-if 'juego_iniciado' not in st.session_state:
-    st.session_state.juego_iniciado = True
-    st.session_state.ronda_actual = 0
-    st.session_state.mercado_casado = False
-    st.session_state.hubo_apagon = False
-    st.session_state.penalizacion_apagon = {}
-    st.session_state.potencia_asignada_anterior = {} 
-    
-    # Cargamos los datos generados por el host para todos
-    sala_id = st.session_state.sala_activa
-    st.session_state.TECNOLOGIAS = db["salas"][sala_id]["TECNOLOGIAS"]
-    st.session_state.equipos_nombres = db["salas"][sala_id]["nombres"]
-    st.session_state.num_equipos = len(st.session_state.equipos_nombres)
-    
-    st.session_state.dinero_acumulado = {eq: 500000 for eq in st.session_state.equipos_nombres}
-    st.session_state.energia_acumulada = {
-        eq: {tech: 0 for tech in st.session_state.TECNOLOGIAS.keys()} for eq in st.session_state.equipos_nombres
-    }
-
-# --- NUEVO: FUNCIÓN PARA LA VENTANA EMERGENTE (MODAL) ---
-
-@st.dialog("📊 Capacidad y costes de las Centrales", width="large")
-def mostrar_ficha_tecnica():
-    st.markdown("Consulta aquí los parámetros de tu equipo:")
-    
-    datos_tecnicos = {
-        "Parámetro": [
-            "Potencia Máx. (MW)",
-            "Cambio Máx. por Hora (MW)",
-            "Coste Operativo (€/MWh)",
-            "Coste por Cambio (€/MW)",
-            "Coste Parada/Arranque (€)"
-        ]
-    }
-    
-    for tech, info in st.session_state.TECNOLOGIAS.items():
-        datos_tecnicos[tech] = [
-            f"{info['pot_max']:,.0f}",
-            f"{info['max_cambio']:,.0f}" if info['max_cambio'] < info['pot_max'] else "Sin límite",
-            f"{info['coste_op']:,.2f}",
-            f"{info['coste_cambio']:,.0f}",
-            f"{info['coste_pa']:,.0f}"
-        ]
-    
-    df_tecnico = pd.DataFrame(datos_tecnicos)
-    styled_df_tec = df_tecnico.style.apply(
-        lambda x: ['font-weight: bold; border-right: 2px solid #9ca3af;' if x.name == 'Parámetro' else '' for _ in x]
-    )
-    
-    st.dataframe(styled_df_tec, hide_index=True, use_container_width=True)
-
-# --- PANTALLA DE INICIO Y CONFIGURACIÓN ---
-if 'juego_iniciado' not in st.session_state:
-    st.session_state.juego_iniciado = False
-    st.session_state.ronda_actual = 0
-    st.session_state.mercado_casado = False
-    st.session_state.hubo_apagon = False
-    st.session_state.penalizacion_apagon = {}
-    st.session_state.potencia_asignada_anterior = {} 
-
-if not st.session_state.juego_iniciado:
-    st.title("⚡ Configuración de la Partida")
-    st.markdown("### Bienvenido al Simulador del Mercado Eléctrico")
-    st.info("Selecciona el número de equipos que van a participar. El juego ajustará automáticamente el tamaño de las centrales para que el mercado esté equilibrado.")
-    
-    num_equipos = st.selectbox("Número de equipos:", [2, 3, 4, 5], index=2) # Por defecto 4
-    
-    if st.button("🚀 Comenzar Partida", type="primary"):
-        st.session_state.num_equipos = num_equipos
-        st.session_state.juego_iniciado = True
-        
-        # Ajuste dinámico de potencia: El mercado base era para 4 jugadores.
-        # Factor = 4 / num_jugadores. Si juegan 2, tienen el doble de potencia cada uno.
-        factor = 4 / num_equipos
-        
-        st.session_state.TECNOLOGIAS = {
-            "Nuclear": {"pot_max": int(970 * factor), "coste_op": 8.0, "max_cambio": int(100 * factor), "coste_cambio": 70, "coste_pa": 150000},
-            "Carbón": {"pot_max": int(830 * factor), "coste_op": 86.0, "max_cambio": int(200 * factor), "coste_cambio": 50, "coste_pa": 70000},
-            "Ciclo Combinado": {"pot_max": int(800 * factor), "coste_op": 121.0, "max_cambio": int(400 * factor), "coste_cambio": 30, "coste_pa": 10000},
-            "Gas": {"pot_max": int(500 * factor), "coste_op": 168.0, "max_cambio": int(500 * factor), "coste_cambio": 0, "coste_pa": 0}
-        }
-        
-        # Inicializar equipos en base al número elegido
-        st.session_state.equipos_nombres = [f"Equipo {i+1}" for i in range(num_equipos)]
-        st.session_state.dinero_acumulado = {eq: 500000 for eq in st.session_state.equipos_nombres}
-        st.session_state.energia_acumulada = {
-            eq: {tech: 0 for tech in st.session_state.TECNOLOGIAS.keys()} for eq in st.session_state.equipos_nombres
-        }
-        st.rerun()
-    st.stop() # Detenemos aquí la ejecución hasta que le den a Comenzar
-
-# --- COMIENZA EL JUEGO REAL ---
-st.title("⚡ Simulador de Mercado Eléctrico")
-
 HORARIOS = [
     {"hora": "08:00 - 09:00", "demanda": 8790, "renovables": 4900},
     {"hora": "09:00 - 10:00", "demanda": 9271, "renovables": 6600},
@@ -252,366 +22,382 @@ HORARIOS = [
     {"hora": "12:00 - 13:00", "demanda": 8750, "renovables": 2750},
 ]
 
-ronda = st.session_state.ronda_actual
+# --- ENRUTADOR MÁGICO ---
+params = st.query_params
+sala_url = params.get("sala", None)
 
-# --- FINAL DEL JUEGO ---
-if ronda >= len(HORARIOS):
-    st.success("🎉 ¡La jornada ha terminado! Aquí tenéis los resultados finales.")
-    st.balloons()
+if sala_url:
+    st.session_state.rol = "jugador"
+    st.session_state.sala_activa = sala_url
+else:
+    if "rol" not in st.session_state:
+        st.session_state.rol = "host"
+
+@st.dialog("📊 Capacidad y costes de las Centrales", width="large")
+def mostrar_ficha_tecnica(sala_id):
+    st.markdown("Consulta aquí los parámetros de las centrales:")
+    datos_tecnicos = {
+        "Parámetro": [
+            "Potencia Máx. (MW)", "Cambio Máx. por Hora (MW)",
+            "Coste Operativo (€/MWh)", "Coste por Cambio (€/MW)", "Coste Parada/Arranque (€)"
+        ]
+    }
+    for tech, info in db["salas"][sala_id]["TECNOLOGIAS"].items():
+        datos_tecnicos[tech] = [
+            f"{info['pot_max']:,.0f}",
+            f"{info['max_cambio']:,.0f}" if info['max_cambio'] < info['pot_max'] else "Sin límite",
+            f"{info['coste_op']:,.2f}", f"{info['coste_cambio']:,.0f}", f"{info['coste_pa']:,.0f}"
+        ]
+    df_tecnico = pd.DataFrame(datos_tecnicos)
+    styled_df_tec = df_tecnico.style.apply(
+        lambda x: ['font-weight: bold; border-right: 2px solid #9ca3af;' if x.name == 'Parámetro' else '' for _ in x]
+    )
+    st.dataframe(styled_df_tec, hide_index=True, use_container_width=True)
+
+# ==========================================
+# 👑 VISTA DEL CREADOR DE LA SALA (HOST)
+# ==========================================
+if st.session_state.rol == "host":
     
-    st.divider()
-    st.markdown("<h1 style='text-align: center;'>🏆 CLASIFICACIÓN FINAL 🏆</h1>", unsafe_allow_html=True)
+    # 1. GENERAR SALA
+    if "sala_activa" not in st.session_state:
+        st.title("⚡ Panel de Control del Mercado")
+        st.info("Bienvenido. Eres el operador del mercado (REE).")
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🏢 Generar Sala", type="primary", use_container_width=True):
+                nuevo_pin = str(random.randint(1000, 9999))
+                db["salas"][nuevo_pin] = {
+                    "estado": "esperando", "equipos": [], "fase": "ofertando", 
+                    "ronda_actual": 0, "ofertas": {}, "hubo_apagon": False,
+                    "dinero_acumulado": {}, "energia_acumulada": {}, "potencia_asignada_anterior": {}
+                }
+                st.session_state.sala_activa = nuevo_pin
+                st.rerun()
+        st.stop()
+
+    sala_id = st.session_state.sala_activa
+    sala = db["salas"][sala_id]
+    estado_sala = sala["estado"]
     
-    clasificacion = sorted(st.session_state.dinero_acumulado.items(), key=lambda x: x[1], reverse=True)
-    # Dibujamos tantas columnas como equipos haya
-    cols_lb = st.columns(st.session_state.num_equipos) 
-    medallas = ["🥇 1º PUESTO", "🥈 2º PUESTO", "🥉 3º PUESTO", "🏅 4º PUESTO", "🏅 5º PUESTO"]
-    
-    for i, (equipo_lb, saldo_lb) in enumerate(clasificacion):
-        with cols_lb[i]:
-            with st.container(border=True):
-                st.markdown(f"<h3 style='text-align: center;'>{medallas[i]}</h3>", unsafe_allow_html=True)
-                st.markdown(f"<h4 style='text-align: center;'>{equipo_lb}</h4>", unsafe_allow_html=True)
-                
-                # Dinero
-                color = "#28a745" if saldo_lb >= 0 else "#dc3545"
-                st.markdown(f"<h2 style='text-align: center; color: {color};'>{saldo_lb:,.0f} €</h2>", unsafe_allow_html=True)
-                
-                # Estadísticas de energía
-                st.divider()
-                datos_energia = st.session_state.energia_acumulada[equipo_lb]
-                energia_total = sum(datos_energia.values())
-                
-                st.markdown(f"<p style='text-align: center; font-size: 1.1em;'><b>⚡ Energía Suministrada:</b><br>{energia_total:,.0f} MWh</p>", unsafe_allow_html=True)
-                
-                tech_ordenadas = sorted(datos_energia.items(), key=lambda x: x[1], reverse=True)
-                html_techs = "<div style='font-size: 0.9em; padding-left: 10px;'>"
-                posicion = 1
-                for tech, mwh in tech_ordenadas:
-                    if mwh > 0:
-                        porcentaje = (mwh / energia_total * 100) if energia_total > 0 else 0
-                        html_techs += f"<b>{posicion}º {tech}:</b> {mwh:,.0f} MWh <i>({porcentaje:.1f}%)</i><br>"
-                        posicion += 1
-                
-                if energia_total == 0:
-                    html_techs += "<i>No generó energía</i>"
-                html_techs += "</div><br>"
-                
-                st.markdown(html_techs, unsafe_allow_html=True)
-    
-    st.stop()
-
-# --- CÓDIGO NORMAL DE LA RONDA ---
-datos_hora = HORARIOS[ronda]
-hora_str = datos_hora["hora"]
-demanda_residual = datos_hora["demanda"] - datos_hora["renovables"]
-
-# --- PANEL SUPERIOR (BARRA LATERAL) ---
-st.sidebar.header(f"🕒 HORA ACTUAL: {hora_str}")
-st.sidebar.progress((ronda + 1) / len(HORARIOS), text=f"Ronda {ronda + 1} de {len(HORARIOS)}")
-st.sidebar.info(f"**Demanda Total:** {datos_hora['demanda']} MW\n\n**Renovables:** -{datos_hora['renovables']} MW\n\n---\n**🏭 DEMANDA A CUBRIR:** {demanda_residual} MW")
-
-st.sidebar.divider()
-
-# --- BOTÓN QUE ABRE LA VENTANA EMERGENTE ---
-if st.sidebar.button("🔍 Capacidad y costes de las Centrales", type="primary", use_container_width=True):
-    mostrar_ficha_tecnica()
-
-# --- INTERFAZ DE OFERTAS ---
-st.subheader(f"📝 Ofertas para el tramo {hora_str}")
-
-tabs = st.tabs(st.session_state.equipos_nombres)
-ofertas = []
-
-
-for i, tab in enumerate(tabs):
-    equipo = st.session_state.equipos_nombres[i]
-    with tab:
-        for tech, info in st.session_state.TECNOLOGIAS.items():
-            clave_historial = f"{equipo}_{tech}"
-            pot_anterior = st.session_state.potencia_asignada_anterior.get(clave_historial, 0)
+    # 2. LOBBY DE ESPERA
+    if estado_sala == "esperando":
+        st.title("⚡ Sala de Espera Activa")
+        URL_BASE = "https://simuladormercado2-jyyg36vuwjm4cvjvepsvs9.streamlit.app" 
+        url_invitacion = f"{URL_BASE}/?sala={sala_id}"
+        
+        col_izq, col_der = st.columns([1, 1])
+        with col_izq:
+            st.markdown("### 📲 ¡Escanea para participar!")
+            st.code(url_invitacion)
+            equipos_unidos = sala["equipos"]
+            st.markdown(f"### 👥 Empresas registradas: {len(equipos_unidos)}")
+            if len(equipos_unidos) > 0:
+                nombres_html = " ".join([f"<span style='background-color: #1e3a8a; color: white; padding: 10px; border-radius: 10px; margin: 5px; display: inline-block;'>{eq}</span>" for eq in equipos_unidos])
+                st.markdown(nombres_html, unsafe_allow_html=True)
+            else:
+                st.warning("Esperando a que las empresas energéticas se conecten...")
+            st.button("🔄 Actualizar lista")
             
-            # EL INTERRUPTOR EMPIEZA APAGADO EN LA RONDA 0
-            activa = st.toggle(f"🔌🔋 Activar {tech}", value=(pot_anterior > 0), key=f"tgl_{equipo}_{tech}_{ronda}", disabled=st.session_state.mercado_casado)
+        with col_der:
+            qr = qrcode.make(url_invitacion)
+            st.image(qr.get_image(), width=350)
+        
+        st.divider()
+        if st.button("🚀 Empezar Partida", type="primary", use_container_width=True):
+            if len(equipos_unidos) >= 2:
+                sala["estado"] = "jugando"
+                factor = 4 / len(equipos_unidos)
+                sala["TECNOLOGIAS"] = {
+                    "Nuclear": {"pot_max": int(970 * factor), "coste_op": 8.0, "max_cambio": int(100 * factor), "coste_cambio": 70, "coste_pa": 150000},
+                    "Carbón": {"pot_max": int(830 * factor), "coste_op": 86.0, "max_cambio": int(200 * factor), "coste_cambio": 50, "coste_pa": 70000},
+                    "Ciclo Combinado": {"pot_max": int(800 * factor), "coste_op": 121.0, "max_cambio": int(400 * factor), "coste_cambio": 30, "coste_pa": 10000},
+                    "Gas": {"pot_max": int(500 * factor), "coste_op": 168.0, "max_cambio": int(500 * factor), "coste_cambio": 0, "coste_pa": 0}
+                }
+                sala["dinero_acumulado"] = {eq: 500000 for eq in equipos_unidos}
+                sala["energia_acumulada"] = {eq: {tech: 0 for tech in sala["TECNOLOGIAS"].keys()} for eq in equipos_unidos}
+                st.rerun()
+            else:
+                st.error("¡Se necesitan al menos 2 empresas para que haya mercado!")
+        st.stop()
+
+    # 3. JUEGO ACTIVO (HOST)
+    elif estado_sala == "jugando":
+        ronda = sala["ronda_actual"]
+        
+        # PANTALLA DE FIN DE JUEGO
+        if ronda >= len(HORARIOS):
+            st.success("🎉 ¡La jornada ha terminado! Aquí tenéis los resultados finales.")
+            st.balloons()
+            st.markdown("<h1 style='text-align: center;'>🏆 CLASIFICACIÓN FINAL 🏆</h1>", unsafe_allow_html=True)
+            clasificacion = sorted(sala["dinero_acumulado"].items(), key=lambda x: x[1], reverse=True)
+            cols_lb = st.columns(len(sala["equipos"])) 
+            medallas = ["🥇 1º PUESTO", "🥈 2º PUESTO", "🥉 3º PUESTO", "🏅 4º PUESTO", "🏅 5º PUESTO"]
+            
+            for i, (equipo_lb, saldo_lb) in enumerate(clasificacion):
+                with cols_lb[i]:
+                    with st.container(border=True):
+                        st.markdown(f"<h3 style='text-align: center;'>{medallas[i]}</h3>", unsafe_allow_html=True)
+                        st.markdown(f"<h4 style='text-align: center;'>{equipo_lb}</h4>", unsafe_allow_html=True)
+                        color = "#28a745" if saldo_lb >= 0 else "#dc3545"
+                        st.markdown(f"<h2 style='text-align: center; color: {color};'>{saldo_lb:,.0f} €</h2>", unsafe_allow_html=True)
+            st.stop()
+
+        datos_hora = HORARIOS[ronda]
+        demanda_residual = datos_hora["demanda"] - datos_hora["renovables"]
+        
+        st.title(f"⚡ REE - Control Central | {datos_hora['hora']}")
+        st.info(f"**Demanda Residual a cubrir:** {demanda_residual} MW")
+        
+        # FASE: OFERTANDO (HOST ESPERA)
+        if sala["fase"] == "ofertando":
+            ofertas_recibidas = len(sala["ofertas"])
+            total_equipos = len(sala["equipos"])
+            
+            st.metric("Empresas que han enviado sus ofertas:", f"{ofertas_recibidas} de {total_equipos}")
+            st.progress(ofertas_recibidas / total_equipos)
             
             col1, col2 = st.columns(2)
             with col1:
-                if activa:
-                    if st.session_state.ronda_actual == 0:
-                        min_slider = 0
-                        max_slider = info['pot_max']
-                        ayuda_slider = f"Primera ronda: ¡Elige hasta {max_slider} MW!"
-                    else:
-                        min_slider = int(max(0, pot_anterior - info['max_cambio']))
-                        max_slider = int(min(info['pot_max'], pot_anterior + info['max_cambio']))
-                        ayuda_slider = f"Potencia previa: {pot_anterior} MW. Cambio máx: ±{info['max_cambio']} MW"
-                    
-                    potencia = st.slider(f"Potencia {tech} (MW)", 
-                                         min_value=min_slider, max_value=max_slider, 
-                                         value=int(pot_anterior) if (st.session_state.ronda_actual > 0 and pot_anterior >= min_slider) else min_slider, 
-                                         step=10, help=ayuda_slider, disabled=st.session_state.mercado_casado,
-                                         key=f"pot_{equipo}_{tech}_{ronda}")
-                else:
-                    st.error(f"🚫🪫 {tech} APAGADA (0 MW).")
-                    potencia = 0
-
+                st.button("🔄 Refrescar Estado", use_container_width=True)
             with col2:
-                # PRECIO SUBE DE 1 EN 1 EURO
-                precio = st.number_input(f"Precio {tech} (€/MWh)", min_value=-500.0, value=float(info['coste_op']),
-                                         step=1.0,
-                                         disabled=(not activa or st.session_state.mercado_casado), key=f"pre_{equipo}_{tech}_{ronda}")
-            
-            ofertas.append({
-                "Equipo": equipo, "Tecnología": tech, "Potencia Ofertada (MW)": potencia, 
-                "Precio (€/MWh)": precio, "Coste Op (€/MWh)": info['coste_op'], 
-                "Coste Cambio (€/MW)": info['coste_cambio'], "Coste P/A Fijo (€)": info['coste_pa'],
-                "Potencia Anterior (MW)": pot_anterior
-            })
-        st.divider()
+                if st.button("⚖️ Casar Mercado", type="primary", use_container_width=True):
+                    if ofertas_recibidas == 0:
+                        st.warning("Nadie ha enviado ofertas aún.")
+                    else:
+                        # Unimos todas las ofertas de todos los equipos
+                        todas_las_ofertas = []
+                        for lista_equipo in sala["ofertas"].values():
+                            todas_las_ofertas.extend(lista_equipo)
+                            
+                        df = pd.DataFrame(todas_las_ofertas)
+                        df = df.sort_values(by="Precio (€/MWh)").reset_index(drop=True)
+                        df["Potencia Acumulada (MW)"] = df["Potencia Ofertada (MW)"].cumsum()
+                        df["Potencia Previa (MW)"] = df["Potencia Acumulada (MW)"] - df["Potencia Ofertada (MW)"]
+                        
+                        def calcular_asignacion(row):
+                            if row["Potencia Previa (MW)"] >= demanda_residual: return 0
+                            elif row["Potencia Acumulada (MW)"] <= demanda_residual: return row["Potencia Ofertada (MW)"]
+                            else: return demanda_residual - row["Potencia Previa (MW)"]
+                                
+                        df["Potencia Asignada (MW)"] = df.apply(calcular_asignacion, axis=1)
+                        ofertas_aceptadas = df[df["Potencia Asignada (MW)"] > 0]
+                        precio_marginal = df.iloc[0]["Precio (€/MWh)"] if ofertas_aceptadas.empty else ofertas_aceptadas.iloc[-1]["Precio (€/MWh)"]
+                        
+                        df["Ingresos (€)"] = df["Potencia Asignada (MW)"] * precio_marginal
+                        df["Costes Op (€)"] = df["Potencia Asignada (MW)"] * df["Coste Op (€/MWh)"]
+                        
+                        if sala["ronda_actual"] == 0:
+                            df["Penalización Cambio (€)"] = 0
+                            df["Penalización Parada/Arranque (€)"] = 0
+                        else:
+                            df["Cambio Carga (MW)"] = abs(df["Potencia Asignada (MW)"] - df["Potencia Anterior (MW)"])
+                            df["Penalización Cambio (€)"] = df["Cambio Carga (MW)"] * df["Coste Cambio (€/MW)"]
+                            def calcular_pa(row):
+                                if row["Potencia Anterior (MW)"] == 0 and row["Potencia Asignada (MW)"] > 0: return row["Coste P/A Fijo (€)"]
+                                elif row["Potencia Anterior (MW)"] > 0 and row["Potencia Asignada (MW)"] == 0: return row["Coste P/A Fijo (€)"]
+                                else: return 0
+                            df["Penalización Parada/Arranque (€)"] = df.apply(calcular_pa, axis=1)
+                        
+                        df["Beneficio Neto (€)"] = df["Ingresos (€)"] - df["Costes Op (€)"] - df["Penalización Cambio (€)"] - df["Penalización Parada/Arranque (€)"]
+                        
+                        total_asignado = df["Potencia Asignada (MW)"].sum()
+                        if total_asignado < demanda_residual:
+                            sala["hubo_apagon"] = True
+                        else:
+                            sala["hubo_apagon"] = False
+                            # Actualizar balances
+                            for _, row in df.iterrows():
+                                eq = row['Equipo']
+                                tech = row['Tecnología']
+                                clave = f"{eq}_{tech}"
+                                sala["potencia_asignada_anterior"][clave] = row["Potencia Asignada (MW)"]
+                                sala["dinero_acumulado"][eq] += row["Beneficio Neto (€)"]
+                                sala["energia_acumulada"][eq][tech] += row["Potencia Asignada (MW)"]
+                        
+                        # Guardamos resultados en la base de datos
+                        sala["resultados_df"] = df.to_dict('records') # Guardamos como diccionario para evitar problemas de hilos
+                        sala["precio_marginal"] = float(precio_marginal)
+                        sala["fase"] = "resultados"
+                        st.rerun()
 
-# --- BOTONES DE ACCIÓN Y MOTOR DEL JUEGO ---
-col_btn1, col_btn2 = st.columns(2)
+        # FASE: RESULTADOS GLOBALES (HOST)
+        elif sala["fase"] == "resultados":
+            if sala["hubo_apagon"]:
+                st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
+                st.error("El sistema eléctrico está al borde del colapso. El mercado ha sido anulado.")
+                if st.button("🔄 Obligar a rehacer Ofertas", type="primary"):
+                    sala["fase"] = "ofertando"
+                    sala["ofertas"] = {}
+                    sala["hubo_apagon"] = False
+                    st.rerun()
+            else:
+                st.success(f"### 💰 Precio Final del Mercado: {sala['precio_marginal']:,.2f} €/MWh")
+                
+                # Resumen de beneficios para el profe
+                df_res = pd.DataFrame(sala["resultados_df"])
+                resumen = df_res.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
+                st.dataframe(resumen, hide_index=True, use_container_width=True)
+                
+                if st.button("⏭️ Avanzar a la Siguiente Hora", type="primary", use_container_width=True):
+                    sala["ronda_actual"] += 1
+                    sala["fase"] = "ofertando"
+                    sala["ofertas"] = {}
+                    st.rerun()
 
-with col_btn1:
-    if st.button("💹 Casar Mercado", type="primary", disabled=st.session_state.mercado_casado):
-        if not ofertas:
-            st.warning("No hay ninguna oferta introducida.")
+# ==========================================
+# 📱 VISTA DEL JUGADOR (EMPRESA)
+# ==========================================
+if st.session_state.rol == "jugador":
+    sala_id = st.session_state.sala_activa
+    
+    if sala_id not in db["salas"]:
+        st.error("❌ Esta sala no existe o la partida ya terminó.")
+        st.stop()
+        
+    sala = db["salas"][sala_id]
+    estado_sala = sala["estado"]
+    
+    # REGISTRO
+    if estado_sala == "esperando":
+        st.title("🏢 Registro de Empresa")
+        if "mi_equipo" not in st.session_state:
+            nombre_equipo = st.text_input("Nombre de tu empresa:")
+            if st.button("Aceptar", type="primary"):
+                if nombre_equipo and nombre_equipo not in sala["equipos"]:
+                    sala["equipos"].append(nombre_equipo)
+                    st.session_state.mi_equipo = nombre_equipo
+                    st.rerun()
+                else:
+                    st.error("Nombre inválido o en uso.")
         else:
-            df = pd.DataFrame(ofertas)
+            st.success(f"✅ Registrado como **{st.session_state.mi_equipo}**.")
+            st.info("Mira la pantalla principal. Empezará cuando el host le dé al botón.")
+            st.button("🔄 Refrescar")
+        st.stop()
+        
+    elif estado_sala == "jugando" and "mi_equipo" not in st.session_state:
+        st.error("Llegaste tarde, la partida ya ha empezado.")
+        st.stop()
+
+    # JUEGO ACTIVO (JUGADOR)
+    mi_equipo = st.session_state.mi_equipo
+    ronda = sala["ronda_actual"]
+    
+    # FIN DEL JUEGO
+    if ronda >= len(HORARIOS):
+        st.success("🎉 ¡El mercado ha cerrado por hoy!")
+        st.info("Mira la pantalla del profesor para ver la clasificación final.")
+        st.stop()
+
+    datos_hora = HORARIOS[ronda]
+    demanda_residual = datos_hora["demanda"] - datos_hora["renovables"]
+    
+    st.sidebar.header(f"🕒 HORA: {datos_hora['hora']}")
+    st.sidebar.info(f"**🏭 DEMANDA A CUBRIR:** {demanda_residual} MW")
+    if st.sidebar.button("🔍 Ver Costes de Centrales", type="primary"):
+        mostrar_ficha_tecnica(sala_id)
+
+    st.title(f"🏢 {mi_equipo}")
+    
+    # FASE: ENVIAR OFERTAS
+    if sala["fase"] == "ofertando":
+        if mi_equipo in sala["ofertas"]:
+            st.success("📤 Oferta enviada a REE.")
+            st.info("Esperando a que el resto de empresas envíen y REE case el mercado...")
+            st.button("🔄 Comprobar resultados")
+        else:
+            st.subheader("📝 Prepara tu oferta")
+            mis_ofertas = []
             
-            df = df.sort_values(by="Precio (€/MWh)").reset_index(drop=True)
-            df["Potencia Acumulada (MW)"] = df["Potencia Ofertada (MW)"].cumsum()
-            df["Potencia Previa (MW)"] = df["Potencia Acumulada (MW)"] - df["Potencia Ofertada (MW)"]
-            
-            def calcular_asignacion(row):
-                if row["Potencia Previa (MW)"] >= demanda_residual: return 0
-                elif row["Potencia Acumulada (MW)"] <= demanda_residual: return row["Potencia Ofertada (MW)"]
-                else: return demanda_residual - row["Potencia Previa (MW)"]
+            with st.form(key=f"form_oferta_{ronda}"):
+                for tech, info in sala["TECNOLOGIAS"].items():
+                    clave_historial = f"{mi_equipo}_{tech}"
+                    pot_anterior = sala["potencia_asignada_anterior"].get(clave_historial, 0)
                     
-            df["Potencia Asignada (MW)"] = df.apply(calcular_asignacion, axis=1)
-            
-            ofertas_aceptadas = df[df["Potencia Asignada (MW)"] > 0]
-            precio_marginal = df.iloc[0]["Precio (€/MWh)"] if ofertas_aceptadas.empty else ofertas_aceptadas.iloc[-1]["Precio (€/MWh)"]
+                    st.markdown(f"**🔌 {tech}** (Anterior: {pot_anterior} MW)")
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        if ronda == 0:
+                            min_sl, max_sl = 0, info['pot_max']
+                        else:
+                            min_sl = int(max(0, pot_anterior - info['max_cambio']))
+                            max_sl = int(min(info['pot_max'], pot_anterior + info['max_cambio']))
+                            
+                        pot = st.slider(f"MW - {tech}", min_sl, max_sl, int(pot_anterior) if pot_anterior >= min_sl else min_sl, step=10)
+                    with col2:
+                        pre = st.number_input(f"€/MWh - {tech}", value=float(info['coste_op']), step=1.0)
+                        
+                    mis_ofertas.append({
+                        "Equipo": mi_equipo, "Tecnología": tech, "Potencia Ofertada (MW)": pot, 
+                        "Precio (€/MWh)": pre, "Coste Op (€/MWh)": info['coste_op'], 
+                        "Coste Cambio (€/MW)": info['coste_cambio'], "Coste P/A Fijo (€)": info['coste_pa'],
+                        "Potencia Anterior (MW)": pot_anterior
+                    })
+                    st.divider()
                 
-            df["Ingresos (€)"] = df["Potencia Asignada (MW)"] * precio_marginal
-            df["Costes Op (€)"] = df["Potencia Asignada (MW)"] * df["Coste Op (€/MWh)"]
+                enviado = st.form_submit_button("⚖️ Enviar Oferta Ciega a REE", type="primary", use_container_width=True)
+                if enviado:
+                    sala["ofertas"][mi_equipo] = mis_ofertas
+                    st.rerun()
+
+    # FASE: VER RESULTADOS PRIVADOS
+    elif sala["fase"] == "resultados":
+        if sala["hubo_apagon"]:
+            st.error("🚨 ¡APAGÓN! No se cubrió la demanda. Prepárate para rehacer la oferta.")
+            st.button("🔄 Actualizar")
+        else:
+            st.success("✅ Mercado Casado. Aquí están tus resultados.")
             
-            if st.session_state.ronda_actual == 0:
-                df["Penalización Cambio (€)"] = 0
-                df["Penalización Parada/Arranque (€)"] = 0
-            else:
-                df["Cambio Carga (MW)"] = abs(df["Potencia Asignada (MW)"] - df["Potencia Anterior (MW)"])
-                df["Penalización Cambio (€)"] = df["Cambio Carga (MW)"] * df["Coste Cambio (€/MW)"]
-                
-                def calcular_pa(row):
-                    if row["Potencia Anterior (MW)"] == 0 and row["Potencia Asignada (MW)"] > 0: return row["Coste P/A Fijo (€)"]
-                    elif row["Potencia Anterior (MW)"] > 0 and row["Potencia Asignada (MW)"] == 0: return row["Coste P/A Fijo (€)"]
-                    else: return 0
-                
-                df["Penalización Parada/Arranque (€)"] = df.apply(calcular_pa, axis=1)
+            df_res = pd.DataFrame(sala["resultados_df"])
+            datos_mios = df_res[df_res["Equipo"] == mi_equipo]
             
-            df["Beneficio Neto (€)"] = df["Ingresos (€)"] - df["Costes Op (€)"] - df["Penalización Cambio (€)"] - df["Penalización Parada/Arranque (€)"]
-
-            total_asignado = df["Potencia Asignada (MW)"].sum()
-            hubo_apagon = total_asignado < demanda_residual
-
-            if hubo_apagon:
-                st.session_state.hubo_apagon = True
-                # IMPORTANTE: No actualizamos el dinero ni la energía porque la ronda es nula
-            else:
-                st.session_state.hubo_apagon = False
-                # Solo guardamos saldos e historial si el mercado casa con éxito
-                for index, row in df.iterrows():
-                    clave = f"{row['Equipo']}_{row['Tecnología']}"
-                    st.session_state.potencia_asignada_anterior[clave] = row["Potencia Asignada (MW)"]
-                    st.session_state.dinero_acumulado[row['Equipo']] += row["Beneficio Neto (€)"]
-                    st.session_state.energia_acumulada[row['Equipo']][row['Tecnología']] += row["Potencia Asignada (MW)"]
-
-            st.session_state.mercado_casado = True
-            st.session_state.resultados_df = df
-            st.session_state.precio_marginal = precio_marginal
-            st.rerun()
-
-with col_btn2:
-    # Solo mostramos el botón de avanzar hora si el mercado se casó Y NO hubo apagón
-    if st.session_state.mercado_casado and not st.session_state.hubo_apagon:
-        if st.button("⏭️ Siguiente Hora", type="primary"):
-            st.session_state.ronda_actual += 1
-            st.session_state.mercado_casado = False
-            st.session_state.hubo_apagon = False
-            st.rerun()
-
-# --- MOSTRAR RESULTADOS ---
-if st.session_state.mercado_casado:
-    
-    # --- LÓGICA DE APAGÓN ---
-    if st.session_state.hubo_apagon:
-        st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
-        
-        potencia_ofertada_total = st.session_state.resultados_df['Potencia Ofertada (MW)'].sum()
-        
-        st.error(f"""
-        ### **Red Eléctrica de España (REE) INFORMA:**
-        No se ha logrado cubrir la demanda residual de **{demanda_residual} MW** (Solo se han ofertado {potencia_ofertada_total} MW en total).
-        
-        El sistema eléctrico está al borde del colapso. El mercado ha sido anulado. **Estáis obligados a rehacer las ofertas para esta misma hora.**
-        """)
-        
-        if st.button("🔄 Rehacer Ofertas para esta hora", type="primary", use_container_width=True):
-            st.session_state.mercado_casado = False
-            st.session_state.hubo_apagon = False
-            st.rerun()
+            saldo_actual = sala["dinero_acumulado"][mi_equipo]
             
-        st.stop() # Detenemos el código aquí para que no muestre las tablas de beneficios ni saldos (ya que la ronda fue nula)
-
-    # --- LÓGICA NORMAL SI NO HAY APAGÓN ---
-    st.success(f"### 💰 Precio Final del Mercado: {st.session_state.precio_marginal:,.2f} €/MWh")
-    
-    st.subheader("Resumen de la Ronda por Equipo")
-
-# --- MOSTRAR RESULTADOS ---
-if st.session_state.mercado_casado:
-    
-    # --- LÓGICA DE APAGÓN ---
-    if st.session_state.hubo_apagon:
-        st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
-        
-        potencia_ofertada_total = st.session_state.resultados_df['Potencia Ofertada (MW)'].sum()
-        
-        st.error(f"""
-        ### **Red Eléctrica de España (REE) INFORMA:**
-        No se ha logrado cubrir la demanda residual de **{demanda_residual} MW** (Solo se han ofertado {potencia_ofertada_total} MW en total).
-        
-        El sistema eléctrico está al borde del colapso. El mercado ha sido anulado. **Estáis obligados a rehacer las ofertas para esta misma hora.**
-        """)
-        
-        # Opcional: Si quieres añadir aquí el mensaje de la multa del 33%, puedes ponerlo así:
-        # st.error("Además, todos los jugadores han sido penalizados perdiendo un 33% de su saldo actual.")
-        
-        if st.button("🔄 Rehacer Ofertas para esta hora", type="primary", use_container_width=True):
-            st.session_state.mercado_casado = False
-            st.session_state.hubo_apagon = False
-            st.rerun()
-            
-        st.stop() # Detenemos el código aquí para que no muestre las tablas de beneficios
-
-    
-    # (A partir de aquí sigue tu código normal con: df_res = st.session_state.resultados_df)
-    df_res = st.session_state.resultados_df
-    resumen_beneficios = df_res.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
-    max_beneficio = resumen_beneficios["Beneficio Neto (€)"].max()
-    
-    # Ponemos a cada equipo en formato vertical (uno debajo del otro)
-    for equipo_nombre in st.session_state.equipos_nombres:
-        datos_equipo = df_res[df_res["Equipo"] == equipo_nombre]
-        beneficio_total = datos_equipo["Beneficio Neto (€)"].sum() if not datos_equipo.empty else 0
-        
-        saldo_actual = st.session_state.dinero_acumulado[equipo_nombre]
-        multa_apagon = st.session_state.penalizacion_apagon.get(equipo_nombre, 0)
-        saldo_antes_apagon = saldo_actual + multa_apagon
-        saldo_anterior = saldo_antes_apagon - beneficio_total
-        
-        # Contenedor visual para separar cada equipo
-        with st.container(border=True):
-            st.markdown(f"### 🛡️ {equipo_nombre}")
-            
-            # --- CONSTRUCCIÓN DE LA TABLA FIJA (EJES INVERTIDOS Y COLORES) ---
+            # Reutilizamos tu código exacto de la tabla bonita adaptado a "datos_mios"
             tecnologias_orden = ["Nuclear", "Carbón", "Ciclo Combinado", "Gas"]
+            emojis_tech = {"Nuclear": "☢️ Nuclear", "Carbón": "🪨 Carbón", "Ciclo Combinado": "💨 Ciclo", "Gas": "🔥 Gas"}
             
-            # Diccionario para añadir el emoji a la cabecera sin romper la lógica interna
-            emojis_tech = {
-                "Nuclear": "☢️ Nuclear",
-                "Carbón": "🪨 Carbón ",
-                "Ciclo Combinado": "💨 Ciclo Combinado ",
-                "Gas": "🔥 Gas "
-            }
-            
-            # 1. Definimos las filas (Eje Y)
             data_dict = {
                 "Concepto": [
-                    "Oferta - Potencia (MW)",
-                    "Oferta - Precio (€/MWh)",
-                    "Vendido - Potencia (MW)",
-                    "Vendido - Precio (€/MWh)",
-                    "Cuentas - Ingresos (€)",
-                    "Cuentas - Costes Op. (€)",
-                    "Cuentas - Penalizaciones (€)",
-                    "Cuentas - Beneficio Neto (€)"
+                    "Oferta - Potencia (MW)", "Oferta - Precio (€/MWh)",
+                    "Vendido - Potencia (MW)", f"Precio Cierre (€/MWh)",
+                    "Cuentas - Ingresos (€)", "Cuentas - Costes Op. (€)",
+                    "Cuentas - Penalizaciones (€)", "Cuentas - Beneficio Neto (€)"
                 ]
             }
             
-            # 2. Rellenamos las columnas (Eje X) con los datos de cada tecnología
             for tech in tecnologias_orden:
-                tech_display = emojis_tech[tech] # Usamos el nombre con emoji para la columna
-                row_data = datos_equipo[datos_equipo["Tecnología"] == tech]
-                
+                tech_disp = emojis_tech[tech]
+                row_data = datos_mios[datos_mios["Tecnología"] == tech]
                 if not row_data.empty:
                     r = row_data.iloc[0]
                     penalizaciones = r["Penalización Cambio (€)"] + r["Penalización Parada/Arranque (€)"]
-                    
-                    # Formateamos previamente a texto para que quede limpio en la tabla
-                    data_dict[tech_display] = [
-                        f"{r['Potencia Ofertada (MW)']:,.0f}",
-                        f"{r['Precio (€/MWh)']:,.2f}",
-                        f"{r['Potencia Asignada (MW)']:,.0f}",
-                        f"{st.session_state.precio_marginal:,.2f}" if r["Potencia Asignada (MW)"] > 0 else "0.00",
-                        f"{r['Ingresos (€)']:,.0f}",
-                        f"{r['Costes Op (€)']:,.0f}",
-                        f"{penalizaciones:,.0f}",
-                        f"{r['Beneficio Neto (€)']:,.0f}"
+                    data_dict[tech_disp] = [
+                        f"{r['Potencia Ofertada (MW)']:,.0f}", f"{r['Precio (€/MWh)']:,.2f}",
+                        f"{r['Potencia Asignada (MW)']:,.0f}", f"{sala['precio_marginal']:,.2f}" if r["Potencia Asignada (MW)"] > 0 else "0.00",
+                        f"{r['Ingresos (€)']:,.0f}", f"{r['Costes Op (€)']:,.0f}",
+                        f"{penalizaciones:,.0f}", f"{r['Beneficio Neto (€)']:,.0f}"
                     ]
                 else:
-                    # Si estaba apagada, rellenamos con 0
-                    data_dict[tech_display] = ["0", "0.00", "0", "0.00", "0", "0", "0", "0"]
+                    data_dict[tech_disp] = ["0", "0.00", "0", "0.00", "0", "0", "0", "0"]
+                    
+            df_display = pd.DataFrame(data_dict)
             
-            # 3. Creamos el DataFrame
-            df_equipo_transposed = pd.DataFrame(data_dict)
-            
-            # 4. Función para aplicar los colores solicitados
             def aplicar_colores(row):
                 concepto = row['Concepto']
-                
-                # Definimos el estilo base según la palabra clave
-                if 'Oferta' in concepto:
-                    # Azul claro para las ofertas
-                    estilo_base = 'background-color: #dbeafe; color: #1e3a8a;' 
-                elif 'Vendido' in concepto or 'Ingresos' in concepto:
-                    # Verde claro para vendido e ingresos
-                    estilo_base = 'background-color: #dcfce7; color: #166534;' 
-                elif 'Costes' in concepto or 'Penalizaciones' in concepto:
-                    # Rojo claro para costes y penalizaciones
-                    estilo_base = 'background-color: #fee2e2; color: #991b1b;' 
-                elif 'Beneficio Neto' in concepto:
-                    # Verde fuerte para el beneficio neto
-                    estilo_base = 'background-color: #16a34a; color: white; font-weight: bold; font-size: 1.05em;' 
-                else:
-                    estilo_base = ''
-                
-                # Replicamos el estilo para todas las columnas de la fila
-                estilos = [estilo_base] * len(row)
-                
-                # Resaltamos de forma especial la columna "Concepto" (índice 0)
-                if estilo_base:
-                    estilos[0] = estilo_base + ' font-weight: 900; border-right: 2px solid #9ca3af;'
-                else:
-                    estilos[0] = 'font-weight: 900; border-right: 2px solid #9ca3af;'
-                    
+                if 'Oferta' in concepto: est = 'background-color: #dbeafe; color: #1e3a8a;' 
+                elif 'Vendido' in concepto or 'Ingresos' in concepto: est = 'background-color: #dcfce7; color: #166534;' 
+                elif 'Costes' in concepto or 'Penalizaciones' in concepto: est = 'background-color: #fee2e2; color: #991b1b;' 
+                elif 'Beneficio Neto' in concepto: est = 'background-color: #16a34a; color: white; font-weight: bold;' 
+                else: est = ''
+                estilos = [est] * len(row)
+                estilos[0] = (est + ' font-weight: bold; border-right: 2px solid gray;') if est else 'font-weight: bold; border-right: 2px solid gray;'
                 return estilos
+
+            styled_df = df_display.style.apply(aplicar_colores, axis=1)
+            st.dataframe(styled_df, hide_index=True, use_container_width=True)
             
-            # 5. Aplicamos el estilo a las celdas
-            styled_df = df_equipo_transposed.style.apply(aplicar_colores, axis=1)
-            
-            # 6. Forzamos la cabecera para que sea NEGRITA y negra
-            styled_df = styled_df.set_table_styles([
-                {'selector': 'th', 'props': [('font-weight', 'bold !important'), ('color', '#000000 !important')]}
-            ])
-            
-            st.dataframe(
-                styled_df,
-                hide_index=True,
-                use_container_width=True
-            )
-            
-            # Mostramos el saldo final al final del contenedor, destacado
-            st.divider()
-            st.markdown(f"<h3 style='text-align: right; color: #1e3a8a;'>💵 SALDO ACTUAL: {saldo_actual:,.0f} €</h3>", unsafe_allow_html=True)
+            st.markdown(f"<h3 style='text-align: right; color: #1e3a8a;'>💵 SALDO TOTAL: {saldo_actual:,.0f} €</h3>", unsafe_allow_html=True)
+            st.info("Esperando a que el Operador del Mercado (Host) inicie la siguiente hora...")
+            st.button("🔄 Refrescar")
