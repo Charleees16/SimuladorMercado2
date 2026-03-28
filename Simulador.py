@@ -1,16 +1,180 @@
 import streamlit as st
 import pandas as pd
+import qrcode
+import random
 
 # streamlit run SimuladorEquipos.py
 
 st.set_page_config(page_title="Simulador Mercado Eléctrico", layout="wide")
 
+# --- MEMORIA COMPARTIDA (BASE DE DATOS EN MEMORIA) ---
+@st.cache_resource
+def obtener_base_de_datos():
+    return {"salas": {}}
+
+db = obtener_base_de_datos()
+
+# --- ENRUTADOR MÁGICO ---
+# Leemos si la URL tiene el parámetro "?sala="
+params = st.query_params
+sala_url = params.get("sala", None)
+
+if sala_url:
+    # Si hay "sala" en la URL, el que entra es un JUGADOR (escaneó el QR o usó el enlace)
+    st.session_state.rol = "jugador"
+    st.session_state.sala_activa = sala_url
+else:
+    # Si la URL está limpia, es el HOST (el que abre la app por primera vez)
+    if "rol" not in st.session_state:
+        st.session_state.rol = "host"
+
+# ==========================================
+# 👑 VISTA DEL CREADOR DE LA SALA (HOST)
+# ==========================================
+if st.session_state.rol == "host":
+    
+    # 1. PANTALLA: GENERAR SALA
+    if "sala_activa" not in st.session_state:
+        st.title("⚡ Panel de Control del Mercado")
+        st.info("Bienvenido. Eres el operador del mercado (REE).")
+        
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            if st.button("🏢 Generar Sala", type="primary", use_container_width=True):
+                nuevo_pin = str(random.randint(1000, 9999))
+                db["salas"][nuevo_pin] = {"estado": "esperando", "equipos": []}
+                st.session_state.sala_activa = nuevo_pin
+                st.rerun()
+        st.stop() # Detenemos aquí para que no se vea nada más
+
+    # 2. PANTALLA: LOBBY DE ESPERA (QR)
+    else:
+        sala_id = st.session_state.sala_activa
+        estado_sala = db["salas"][sala_id]["estado"]
+        
+        if estado_sala == "esperando":
+            st.title("⚡ Sala de Espera Activa")
+            
+            # ⚠️ MUY IMPORTANTE PARA PROBAR HOY: 
+            # Cambia esta IP por la "Network URL" que te sale en la terminal al hacer streamlit run.
+            # Ejemplo: "http://192.168.1.35:8501"
+            URL_BASE = "http://10.0.0.144:8501" 
+            url_invitacion = f"{URL_BASE}/?sala={sala_id}"
+            
+            col_izq, col_der = st.columns([1, 1])
+            with col_izq:
+                st.markdown("### 📲 ¡Escanea para participar!")
+                st.markdown("O introduce este enlace en tu navegador:")
+                st.code(url_invitacion)
+                
+                equipos_unidos = db["salas"][sala_id]["equipos"]
+                st.markdown(f"### 👥 Empresas registradas: {len(equipos_unidos)}")
+                
+                if len(equipos_unidos) > 0:
+                    nombres_html = " ".join([f"<span style='background-color: #1e3a8a; color: white; padding: 10px; border-radius: 10px; margin: 5px; display: inline-block;'>{eq}</span>" for eq in equipos_unidos])
+                    st.markdown(nombres_html, unsafe_allow_html=True)
+                else:
+                    st.warning("Esperando a que las empresas energéticas se conecten...")
+                
+                st.button("🔄 Actualizar lista")
+                
+            with col_der:
+                # Generamos el QR visual
+                qr = qrcode.make(url_invitacion)
+                st.image(qr.get_image(), width=350)
+            
+            st.divider()
+            
+            if st.button("🚀 Empezar Partida", type="primary", use_container_width=True):
+                if len(equipos_unidos) >= 2:
+                    # El Host arranca la partida
+                    db["salas"][sala_id]["estado"] = "jugando"
+                    num_equipos = len(equipos_unidos)
+                    factor = 4 / num_equipos
+                    
+                    db["salas"][sala_id]["TECNOLOGIAS"] = {
+                        "Nuclear": {"pot_max": int(970 * factor), "coste_op": 8.0, "max_cambio": int(100 * factor), "coste_cambio": 70, "coste_pa": 150000},
+                        "Carbón": {"pot_max": int(830 * factor), "coste_op": 86.0, "max_cambio": int(200 * factor), "coste_cambio": 50, "coste_pa": 70000},
+                        "Ciclo Combinado": {"pot_max": int(800 * factor), "coste_op": 121.0, "max_cambio": int(400 * factor), "coste_cambio": 30, "coste_pa": 10000},
+                        "Gas": {"pot_max": int(500 * factor), "coste_op": 168.0, "max_cambio": int(500 * factor), "coste_cambio": 0, "coste_pa": 0}
+                    }
+                    db["salas"][sala_id]["nombres"] = equipos_unidos
+                    st.rerun()
+                else:
+                    st.error("¡Se necesitan al menos 2 empresas para que haya mercado!")
+            st.stop() # El host se queda aquí hasta que le da a empezar
+
+# ==========================================
+# 📱 VISTA DEL JUGADOR (ESCANEA EL QR)
+# ==========================================
+if st.session_state.rol == "jugador":
+    sala_id = st.session_state.sala_activa
+    
+    if sala_id not in db["salas"]:
+        st.error("❌ Esta sala no existe, el código es incorrecto o la partida ya terminó.")
+        st.stop()
+        
+    estado_sala = db["salas"][sala_id]["estado"]
+    
+    if estado_sala == "esperando":
+        st.title("🏢 Registro de Empresa Energética")
+        
+        if "mi_equipo" not in st.session_state:
+            st.info(f"Te vas a unir a la sala: **{sala_id}**")
+            nombre_equipo = st.text_input("¿Cuál es el nombre de tu empresa energética?")
+            
+            if st.button("Aceptar", type="primary"):
+                if nombre_equipo:
+                    if nombre_equipo in db["salas"][sala_id]["equipos"]:
+                        st.error("Ese nombre ya está en uso en esta sala. Elige otro.")
+                    else:
+                        db["salas"][sala_id]["equipos"].append(nombre_equipo)
+                        st.session_state.mi_equipo = nombre_equipo
+                        st.rerun()
+                else:
+                    st.warning("Por favor, introduce un nombre para tu empresa.")
+        else:
+            st.success(f"✅ ¡Tu empresa **{st.session_state.mi_equipo}** se ha registrado con éxito!")
+            st.info("👀 Mira a la pantalla principal. La jornada de mercado empezará cuando el host le dé al botón.")
+            st.button("🔄 Comprobar si ha empezado")
+        st.stop() # El jugador se queda aquí hasta que el host cambia el estado a "jugando"
+        
+    elif estado_sala == "jugando" and "mi_equipo" not in st.session_state:
+        st.error("La partida ya ha empezado y no te registraste a tiempo. 😢")
+        st.stop()
+
+
+# ==========================================
+# ⚙️ INICIALIZACIÓN CUANDO LA PARTIDA EMPIEZA
+# ==========================================
+# Si el código llega hasta aquí, es porque db["salas"][sala_id]["estado"] == "jugando" 
+# (Y el st.stop() ya no frena la ejecución)
+
+if 'juego_iniciado' not in st.session_state:
+    st.session_state.juego_iniciado = True
+    st.session_state.ronda_actual = 0
+    st.session_state.mercado_casado = False
+    st.session_state.hubo_apagon = False
+    st.session_state.penalizacion_apagon = {}
+    st.session_state.potencia_asignada_anterior = {} 
+    
+    # Cargamos los datos generados por el host para todos
+    sala_id = st.session_state.sala_activa
+    st.session_state.TECNOLOGIAS = db["salas"][sala_id]["TECNOLOGIAS"]
+    st.session_state.equipos_nombres = db["salas"][sala_id]["nombres"]
+    st.session_state.num_equipos = len(st.session_state.equipos_nombres)
+    
+    st.session_state.dinero_acumulado = {eq: 500000 for eq in st.session_state.equipos_nombres}
+    st.session_state.energia_acumulada = {
+        eq: {tech: 0 for tech in st.session_state.TECNOLOGIAS.keys()} for eq in st.session_state.equipos_nombres
+    }
+
 # --- NUEVO: FUNCIÓN PARA LA VENTANA EMERGENTE (MODAL) ---
-@st.dialog("📊 Ficha Técnica de las Centrales", width="large")
+
+@st.dialog("📊 Capacidad y costes de las Centrales", width="large")
 def mostrar_ficha_tecnica():
     st.markdown("Consulta aquí los parámetros de tu equipo:")
     
-    # Recuperamos los textos originales más largos para que se vea perfecto en grande
     datos_tecnicos = {
         "Parámetro": [
             "Potencia Máx. (MW)",
@@ -36,7 +200,6 @@ def mostrar_ficha_tecnica():
     )
     
     st.dataframe(styled_df_tec, hide_index=True, use_container_width=True)
-# ---------------------------------------------------------
 
 # --- PANTALLA DE INICIO Y CONFIGURACIÓN ---
 if 'juego_iniciado' not in st.session_state:
@@ -151,7 +314,7 @@ st.sidebar.info(f"**Demanda Total:** {datos_hora['demanda']} MW\n\n**Renovables:
 st.sidebar.divider()
 
 # --- BOTÓN QUE ABRE LA VENTANA EMERGENTE ---
-if st.sidebar.button("🔍 Abrir Ficha Técnica", type="primary", use_container_width=True):
+if st.sidebar.button("🔍 Capacidad y costes de las Centrales", type="primary", use_container_width=True):
     mostrar_ficha_tecnica()
 
 # --- INTERFAZ DE OFERTAS ---
