@@ -58,7 +58,7 @@ if st.session_state.rol == "host":
             # ⚠️ MUY IMPORTANTE PARA PROBAR HOY: 
             # Cambia esta IP por la "Network URL" que te sale en la terminal al hacer streamlit run.
             # Ejemplo: "http://192.168.1.35:8501"
-            URL_BASE = "http://10.0.0.144:8501" 
+            URL_BASE = "https://simuladormercado2-jyyg36vuwjm4cvjvepsvs9.streamlit.app/" 
             url_invitacion = f"{URL_BASE}/?sala={sala_id}"
             
             col_izq, col_der = st.columns([1, 1])
