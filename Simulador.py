@@ -35,24 +35,35 @@ else:
         st.session_state.rol = "host"
 
 @st.dialog("📊 Capacidad y costes de las Centrales", width="large")
+
 def mostrar_ficha_tecnica(sala_id):
-    st.markdown("Consulta aquí los parámetros de las centrales:")
+    st.markdown("Consulta aquí los parámetros de tu equipo:")
+    
     datos_tecnicos = {
         "Parámetro": [
-            "Potencia Máx. (MW)", "Cambio Máx. por Hora (MW)",
-            "Coste Operativo (€/MWh)", "Coste por Cambio (€/MW)", "Coste Parada/Arranque (€)"
+            "Potencia Máx. (MW)",
+            "Cambio Máx. por Hora (MW)",
+            "Coste Operativo (€/MWh)",
+            "Coste por Cambio (€/MW)",
+            "Coste Parada/Arranque (€)"
         ]
     }
+    
+    # Leemos de la "db" compartida usando el sala_id
     for tech, info in db["salas"][sala_id]["TECNOLOGIAS"].items():
         datos_tecnicos[tech] = [
             f"{info['pot_max']:,.0f}",
             f"{info['max_cambio']:,.0f}" if info['max_cambio'] < info['pot_max'] else "Sin límite",
-            f"{info['coste_op']:,.2f}", f"{info['coste_cambio']:,.0f}", f"{info['coste_pa']:,.0f}"
+            f"{info['coste_op']:,.2f}",
+            f"{info['coste_cambio']:,.0f}",
+            f"{info['coste_pa']:,.0f}"
         ]
+    
     df_tecnico = pd.DataFrame(datos_tecnicos)
     styled_df_tec = df_tecnico.style.apply(
         lambda x: ['font-weight: bold; border-right: 2px solid #9ca3af;' if x.name == 'Parámetro' else '' for _ in x]
     )
+    
     st.dataframe(styled_df_tec, hide_index=True, use_container_width=True)
 
 # ==========================================
@@ -298,12 +309,16 @@ if st.session_state.rol == "jugador":
     datos_hora = HORARIOS[ronda]
     demanda_residual = datos_hora["demanda"] - datos_hora["renovables"]
     
-    st.sidebar.header(f"🕒 HORA: {datos_hora['hora']}")
-    st.sidebar.info(f"**🏭 DEMANDA A CUBRIR:** {demanda_residual} MW")
-    if st.sidebar.button("🔍 Ver Costes de Centrales", type="primary"):
-        mostrar_ficha_tecnica(sala_id)
-
     st.title(f"🏢 {mi_equipo}")
+    
+    # Ponemos la información principal directamente en la pantalla, ideal para el móvil
+    st.info(f"🕒 **HORA:** {datos_hora['hora']} | 🏭 **DEMANDA A CUBRIR:** {demanda_residual} MW")
+    
+    # Botón gigante y accesible en el móvil para abrir el Modal
+    if st.button("🔍 Ver Capacidad y Costes de mis Centrales", use_container_width=True):
+        mostrar_ficha_tecnica(sala_id)
+        
+    st.divider()
     
     # FASE: ENVIAR OFERTAS
     if sala["fase"] == "ofertando":
