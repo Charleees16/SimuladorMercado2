@@ -166,7 +166,17 @@ if st.session_state.rol == "host":
         demanda_residual = datos_hora["demanda"] - datos_hora["renovables"]
         
         st.title(f"⚡ REE - Control Central | {datos_hora['hora']}")
-        st.info(f"**Demanda Residual a cubrir:** {demanda_residual} MW")
+        
+        # Demanda MUY grande, pero sin pasarse 😉
+        st.markdown(
+            f"""
+            <div style="text-align: center; background-color: #fffbeb; padding: 20px; border-radius: 15px; border: 2px solid #f59e0b; margin-bottom: 20px;">
+                <h3 style="color: #b45309; margin: 0;">🏭 DEMANDA RESIDUAL A CUBRIR</h3>
+                <h1 style="font-size: 4.5rem; color: #d97706; margin: 0;"><strong>{demanda_residual} MW</strong></h1>
+            </div>
+            """, 
+            unsafe_allow_html=True
+        )
         
         # FASE: OFERTANDO (HOST ESPERA)
         if sala["fase"] == "ofertando":
@@ -311,8 +321,8 @@ if st.session_state.rol == "jugador":
     
     st.title(f"🏢 {mi_equipo}")
     
-    # Ponemos la información principal directamente en la pantalla, ideal para el móvil
-    st.info(f"🕒 **HORA:** {datos_hora['hora']} | 🏭 **DEMANDA A CUBRIR:** {demanda_residual} MW")
+# Ponemos la información principal directamente en la pantalla, ideal para el móvil
+    st.info(f"🕒 **HORA:** {datos_hora['hora']}\n\n🏭 **DEMANDA A CUBRIR:** {demanda_residual} MW")
     
     # Botón gigante y accesible en el móvil para abrir el Modal
     if st.button("🔍 Ver Capacidad y Costes de mis Centrales", use_container_width=True):
