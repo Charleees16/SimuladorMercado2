@@ -174,45 +174,46 @@ if st.session_state.rol == "host":
         st.title(f"⚡ REE - Control Central | {datos_hora['hora']}")
         
         # Panel visual: Ecuación de la demanda + Barra de Mix Energético
+        # Panel visual: Ecuación de la demanda + Barra de Mix Energético
         st.markdown(
-            f"""
-            <div style="background-color: #fffbeb; padding: 25px; border-radius: 15px; border: 2px solid #f59e0b; margin-bottom: 20px; box-shadow: 2px 2px 10px rgba(0,0,0,0.05);">
-                
-                <div style="display: flex; justify-content: space-around; text-align: center; align-items: center; flex-wrap: wrap;">
-                    <div style="margin: 10px;">
-                        <h3 style="color: #b45309; margin: 0; font-size: 1.3rem;">🏭 DEMANDA TOTAL</h3>
-                        <h1 style="font-size: 3rem; color: #d97706; margin: 0;"><strong>{demanda_total} MW</strong></h1>
-                    </div>
-                    <div style="margin: 10px;">
-                        <h1 style="font-size: 3rem; color: #9ca3af; margin: 0;"><strong>-</strong></h1>
-                    </div>
-                    <div style="margin: 10px;">
-                        <h3 style="color: #166534; margin: 0; font-size: 1.3rem;">🌱 RENOVABLES</h3>
-                        <h1 style="font-size: 3rem; color: #22c55e; margin: 0;"><strong>{renovables} MW</strong></h1>
-                    </div>
-                    <div style="margin: 10px;">
-                        <h1 style="font-size: 3rem; color: #9ca3af; margin: 0;"><strong>=</strong></h1>
-                    </div>
-                    <div style="margin: 10px; padding: 10px 20px; background-color: #fef3c7; border-radius: 10px; border: 2px dashed #ea580c;">
-                        <h3 style="color: #ea580c; margin: 0; font-size: 1.3rem;">⚡ A CUBRIR (MERCADO)</h3>
-                        <h1 style="font-size: 3.5rem; color: #ea580c; margin: 0;"><strong>{demanda_residual} MW</strong></h1>
-                    </div>
-                </div>
-                
-                <div style="margin-top: 25px;">
-                    <p style="text-align: center; margin-bottom: 8px; color: #4b5563; font-weight: bold; font-size: 1.1rem;">Mix Energético (Impacto Renovable)</p>
-                    <div style="width: 100%; background-color: #e5e7eb; border-radius: 20px; height: 35px; display: flex; overflow: hidden; border: 1px solid #d1d5db;">
-                        <div style="width: {pct_renovables}%; background-color: #22c55e; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
-                            🌱 {pct_renovables:.1f}% Renovables
-                        </div>
-                        <div style="width: {pct_residual}%; background-color: #f59e0b; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
-                            🏭 {pct_residual:.1f}% Mercado Térmico
-                        </div>
-                    </div>
-                </div>
-                
+f"""
+<div style="background-color: #fffbeb; padding: 25px; border-radius: 15px; border: 2px solid #f59e0b; margin-bottom: 20px; box-shadow: 2px 2px 10px rgba(0,0,0,0.05);">
+    
+    <div style="display: flex; justify-content: space-around; text-align: center; align-items: center; flex-wrap: wrap;">
+        <div style="margin: 10px;">
+            <h3 style="color: #b45309; margin: 0; font-size: 1.3rem;">🏭 DEMANDA TOTAL</h3>
+            <h1 style="font-size: 3rem; color: #d97706; margin: 0;"><strong>{demanda_total} MW</strong></h1>
+        </div>
+        <div style="margin: 10px;">
+            <h1 style="font-size: 3rem; color: #9ca3af; margin: 0;"><strong>-</strong></h1>
+        </div>
+        <div style="margin: 10px;">
+            <h3 style="color: #166534; margin: 0; font-size: 1.3rem;">🌱 RENOVABLES</h3>
+            <h1 style="font-size: 3rem; color: #22c55e; margin: 0;"><strong>{renovables} MW</strong></h1>
+        </div>
+        <div style="margin: 10px;">
+            <h1 style="font-size: 3rem; color: #9ca3af; margin: 0;"><strong>=</strong></h1>
+        </div>
+        <div style="margin: 10px; padding: 10px 20px; background-color: #fef3c7; border-radius: 10px; border: 2px dashed #ea580c;">
+            <h3 style="color: #ea580c; margin: 0; font-size: 1.3rem;">⚡ A CUBRIR (MERCADO)</h3>
+            <h1 style="font-size: 3.5rem; color: #ea580c; margin: 0;"><strong>{demanda_residual} MW</strong></h1>
+        </div>
+    </div>
+    
+    <div style="margin-top: 25px;">
+        <p style="text-align: center; margin-bottom: 8px; color: #4b5563; font-weight: bold; font-size: 1.1rem;">Mix Energético (Impacto Renovable)</p>
+        <div style="width: 100%; background-color: #e5e7eb; border-radius: 20px; height: 35px; display: flex; overflow: hidden; border: 1px solid #d1d5db;">
+            <div style="width: {pct_renovables}%; background-color: #22c55e; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
+                🌱 {pct_renovables:.1f}% Renovables
             </div>
-            """, 
+            <div style="width: {pct_residual}%; background-color: #f59e0b; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
+                🏭 {pct_residual:.1f}% Mercado Térmico
+            </div>
+        </div>
+    </div>
+    
+</div>
+""", 
             unsafe_allow_html=True
         )
         
