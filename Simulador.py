@@ -201,10 +201,10 @@ if st.session_state.rol == "host":
 <p style="text-align: center; margin-bottom: 8px; color: #4b5563; font-weight: bold; font-size: 1.1rem;">Mix Energético</p>
 <div style="width: 100%; background-color: #e5e7eb; border-radius: 20px; height: 35px; display: flex; overflow: hidden; border: 1px solid #d1d5db;">
 <div style="width: {pct_renovables}%; background-color: #22c55e; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
-🌱 {pct_renovables:.1f}% Renovables
+🌱 {pct_renovables:.1f}% 
 </div>
 <div style="width: {pct_residual}%; background-color: #f59e0b; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
-🏭 {pct_residual:.1f}% Otras fuentes de energía
+⚡ {pct_residual:.1f}% 
 </div>
 </div>
 </div>
