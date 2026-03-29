@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import qrcode
 import random
+from streamlit_autorefresh import st_autorefresh
 
 # streamlit run SimuladorEquipos.py
 
@@ -93,11 +94,13 @@ if st.session_state.rol == "host":
             equipos_unidos = sala["equipos"]
             st.markdown(f"### 👥 Empresas registradas: {len(equipos_unidos)}")
             if len(equipos_unidos) > 0:
-                nombres_html = " ".join([f"<span style='background-color: #1e3a8a; color: white; padding: 10px; border-radius: 10px; margin: 5px; display: inline-block;'>{eq}</span>" for eq in equipos_unidos])
-                st.markdown(nombres_html, unsafe_allow_html=True)
-            else:
-                st.warning("Esperando a que las empresas energéticas se conecten...")
-            st.button("🔄 Actualizar lista")
+                    nombres_html = " ".join([f"<span style='background-color: #1e3a8a; color: white; padding: 10px; border-radius: 10px; margin: 5px; display: inline-block;'>{eq}</span>" for eq in equipos_unidos])
+                    st.markdown(nombres_html, unsafe_allow_html=True)
+                else:
+                    st.warning("Esperando a que las empresas energéticas se conecten...")
+                
+                st_autorefresh(interval=2000, key="refresh_host_lobby")
+                
             
         with col_der:
             qr = qrcode.make(url_invitacion)
@@ -271,10 +274,11 @@ if st.session_state.rol == "jugador":
                 else:
                     st.error("Nombre inválido o en uso.")
         else:
-            st.success(f"✅ Registrado como **{st.session_state.mi_equipo}**.")
-            st.info("Mira la pantalla principal. Empezará cuando el host le dé al botón.")
-            st.button("🔄 Refrescar")
-        st.stop()
+            st.success(f"✅ ¡Tu empresa **{st.session_state.mi_equipo}** se ha registrado con éxito!")
+            st.info("👀 Mira a la pantalla principal. La jornada de mercado empezará cuando el host le dé al botón.")
+            
+            st_autorefresh(interval=2000, key="refresh_jugador_lobby")
+        st.stop() 
         
     elif estado_sala == "jugando" and "mi_equipo" not in st.session_state:
         st.error("Llegaste tarde, la partida ya ha empezado.")
