@@ -165,15 +165,12 @@ if st.session_state.rol == "host":
             st.metric("Empresas que han enviado sus ofertas:", f"{ofertas_recibidas} de {total_equipos}")
             st.progress(ofertas_recibidas / total_equipos)
             
-            col1, col2 = st.columns(2)
-            with col1:
-                st.button("🔄 Refrescar Estado", use_container_width=True)
-            with col2:
-                if st.button("⚖️ Casar Mercado", type="primary", use_container_width=True):
+            st_autorefresh(interval=2000, key="refresh_host_ofertando")
+            
+            if st.button("⚖️ Casar Mercado", type="primary", use_container_width=True):
                     if ofertas_recibidas == 0:
                         st.warning("Nadie ha enviado ofertas aún.")
                     else:
-                        # Unimos todas las ofertas de todos los equipos
                         todas_las_ofertas = []
                         for lista_equipo in sala["ofertas"].values():
                             todas_las_ofertas.extend(lista_equipo)
