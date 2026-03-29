@@ -93,14 +93,15 @@ if st.session_state.rol == "host":
             st.code(url_invitacion)
             equipos_unidos = sala["equipos"]
             st.markdown(f"### 👥 Empresas registradas: {len(equipos_unidos)}")
+            
             if len(equipos_unidos) > 0:
-                    nombres_html = " ".join([f"<span style='background-color: #1e3a8a; color: white; padding: 10px; border-radius: 10px; margin: 5px; display: inline-block;'>{eq}</span>" for eq in equipos_unidos])
-                    st.markdown(nombres_html, unsafe_allow_html=True)
-                else:
-                    st.warning("Esperando a que las empresas energéticas se conecten...")
-                
-                st_autorefresh(interval=2000, key="refresh_host_lobby")
-                
+                nombres_html = " ".join([f"<span style='background-color: #1e3a8a; color: white; padding: 10px; border-radius: 10px; margin: 5px; display: inline-block;'>{eq}</span>" for eq in equipos_unidos])
+                st.markdown(nombres_html, unsafe_allow_html=True)
+            else:
+                st.warning("Esperando a que las empresas energéticas se conecten...")
+            
+            # 👇 CÓDIGO NUEVO SUSTITUYENDO AL BOTÓN
+            st_autorefresh(interval=2000, key="refresh_host_lobby")
             
         with col_der:
             qr = qrcode.make(url_invitacion)
