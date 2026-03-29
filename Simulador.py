@@ -311,7 +311,8 @@ if st.session_state.rol == "jugador":
         if mi_equipo in sala["ofertas"]:
             st.success("📤 Oferta enviada a REE.")
             st.info("Esperando a que el resto de empresas envíen y REE case el mercado...")
-            st.button("🔄 Comprobar resultados")
+            # 👇 NUEVO: Refresco automático
+            st_autorefresh(interval=2000, key="refresh_jugador_esperando")
         else:
             st.subheader("📝 Prepara tu oferta")
             mis_ofertas = []
@@ -349,9 +350,10 @@ if st.session_state.rol == "jugador":
 
     # FASE: VER RESULTADOS PRIVADOS
     elif sala["fase"] == "resultados":
-        if sala["hubo_apagon"]:
-            st.error("🚨 ¡APAGÓN! No se cubrió la demanda. Prepárate para rehacer la oferta.")
-            st.button("🔄 Actualizar")
+        st.markdown(f"<h3 style='text-align: right; color: #1e3a8a;'>💵 SALDO TOTAL: {saldo_actual:,.0f} €</h3>", unsafe_allow_html=True)
+            st.info("Esperando a que el Operador del Mercado (Host) inicie la siguiente hora...")
+            # 👇 REEMPLAZAR EL BOTÓN POR ESTO:
+            st_autorefresh(interval=2000, key="refresh_jugador_resultados")
         else:
             st.success("✅ Mercado Casado. Aquí están tus resultados.")
             
