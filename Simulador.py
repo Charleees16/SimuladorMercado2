@@ -276,8 +276,7 @@ if st.session_state.rol == "jugador":
                 else:
                     st.error("Nombre inválido o en uso.")
         else:
-            st.success(f"✅ ¡Tu empresa **{st.session_state.mi_equipo}** se ha registrado con éxito!")
-            st.info("👀 Mira a la pantalla principal. La jornada de mercado empezará cuando el host le dé al botón.")
+            st.success(f"✅ ¡Tu empresa **{st.session_state.mi_equipo}** se ha registrado con éxito! La jornada de mercado empezará muy pronto...")
             
             st_autorefresh(interval=2000, key="refresh_jugador_lobby")
         st.stop() 
@@ -343,7 +342,7 @@ if st.session_state.rol == "jugador":
                     })
                     st.divider()
                 
-                enviado = st.form_submit_button("⚖️ Enviar Oferta Ciega a REE", type="primary", use_container_width=True)
+                enviado = st.form_submit_button("⚖️ Enviar Oferta ", type="primary", use_container_width=True)
                 if enviado:
                     sala["ofertas"][mi_equipo] = mis_ofertas
                     st.rerun()
