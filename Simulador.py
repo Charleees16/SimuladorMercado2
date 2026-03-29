@@ -116,10 +116,18 @@ if st.session_state.rol == "host":
                 }
                 sala["dinero_acumulado"] = {eq: 500000 for eq in equipos_unidos}
                 sala["energia_acumulada"] = {eq: {tech: 0 for tech in sala["TECNOLOGIAS"].keys()} for eq in equipos_unidos}
+                
+                # 👇 AQUÍ ESTÁN LAS VARIABLES QUE FALTABAN INICIALIZAR 👇
+                sala["ronda_actual"] = 0
+                sala["fase"] = "ofertando"
+                sala["ofertas"] = {}
+                sala["potencia_asignada_anterior"] = {}
+                sala["hubo_apagon"] = False
+                # 👆 ------------------------------------------------ 👆
+
                 st.rerun()
             else:
                 st.error("¡Se necesitan al menos 2 empresas para que haya mercado!")
-        st.stop()
 
     # 3. JUEGO ACTIVO (HOST)
     elif estado_sala == "jugando":
