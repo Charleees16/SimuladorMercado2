@@ -192,18 +192,18 @@ if st.session_state.rol == "host":
 <h1 style="font-size: 3rem; color: #9ca3af; margin: 0;"><strong>=</strong></h1>
 </div>
 <div style="margin: 10px; padding: 10px 20px; background-color: #fef3c7; border-radius: 10px; border: 2px dashed #ea580c;">
-<h3 style="color: #ea580c; margin: 0; font-size: 1.3rem;">⚡ A CUBRIR (MERCADO)</h3>
+<h3 style="color: #ea580c; margin: 0; font-size: 1.3rem;">⚡ A CUBRIR</h3>
 <h1 style="font-size: 3.5rem; color: #ea580c; margin: 0;"><strong>{demanda_residual} MW</strong></h1>
 </div>
 </div>
 <div style="margin-top: 25px;">
-<p style="text-align: center; margin-bottom: 8px; color: #4b5563; font-weight: bold; font-size: 1.1rem;">Mix Energético (Impacto Renovable)</p>
+<p style="text-align: center; margin-bottom: 8px; color: #4b5563; font-weight: bold; font-size: 1.1rem;">Mix Energético</p>
 <div style="width: 100%; background-color: #e5e7eb; border-radius: 20px; height: 35px; display: flex; overflow: hidden; border: 1px solid #d1d5db;">
 <div style="width: {pct_renovables}%; background-color: #22c55e; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
 🌱 {pct_renovables:.1f}% Renovables
 </div>
 <div style="width: {pct_residual}%; background-color: #f59e0b; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold; font-size: 1rem;">
-🏭 {pct_residual:.1f}% Mercado Térmico
+🏭 {pct_residual:.1f}% Otras fuentes de energía
 </div>
 </div>
 </div>
