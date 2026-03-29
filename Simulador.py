@@ -62,7 +62,7 @@ if st.session_state.rol == "host":
     
     # 1. GENERAR SALA
     if "sala_activa" not in st.session_state:
-        st.title("⚡ Bienvenido. Eres el operador del mercado (REE).")
+        st.title("⚡¡Bienvenido! Eres el operador del mercado (REE)")
         
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
