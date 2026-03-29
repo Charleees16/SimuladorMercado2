@@ -62,20 +62,16 @@ if st.session_state.rol == "host":
     
     # 1. GENERAR SALA
     if "sala_activa" not in st.session_state:
-        st.title("⚡ Panel de Control del Mercado")
-        st.info("Bienvenido. Eres el operador del mercado (REE).")
+        st.title("⚡ Bienvenido. Eres el operador del mercado (REE).")
+        
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
-            if st.button("🏢 Generar Sala", type="primary", use_container_width=True):
+            if st.button("👥 Generar Sala", type="primary", use_container_width=True):
                 nuevo_pin = str(random.randint(1000, 9999))
-                db["salas"][nuevo_pin] = {
-                    "estado": "esperando", "equipos": [], "fase": "ofertando", 
-                    "ronda_actual": 0, "ofertas": {}, "hubo_apagon": False,
-                    "dinero_acumulado": {}, "energia_acumulada": {}, "potencia_asignada_anterior": {}
-                }
+                db["salas"][nuevo_pin] = {"estado": "esperando", "equipos": []}
                 st.session_state.sala_activa = nuevo_pin
                 st.rerun()
-        st.stop()
+        st.stop() # Detenemos aquí para que no se vea nada más
 
     sala_id = st.session_state.sala_activa
     sala = db["salas"][sala_id]
