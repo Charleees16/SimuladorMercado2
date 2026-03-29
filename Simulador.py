@@ -60,11 +60,12 @@ def mostrar_ficha_tecnica(sala_id):
         ]
     
     df_tecnico = pd.DataFrame(datos_tecnicos)
-    styled_df_tec = df_tecnico.style.apply(
+    # Ocultamos el índice y aplicamos los estilos
+    styled_df_tec = df_tecnico.style.hide(axis="index").apply(
         lambda x: ['font-weight: bold; border-right: 2px solid #9ca3af;' if x.name == 'Parámetro' else '' for _ in x]
     )
-    
-    st.dataframe(styled_df_tec, hide_index=True, use_container_width=True)
+    # Usamos st.table para hacerla 100% estática
+    st.table(styled_df_tec)
 
 # ==========================================
 # 👑 VISTA DEL CREADOR DE LA SALA (HOST)
@@ -298,7 +299,8 @@ if st.session_state.rol == "host":
                 # Resumen de beneficios para el profe
                 df_res = pd.DataFrame(sala["resultados_df"])
                 resumen = df_res.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
-                st.dataframe(resumen, hide_index=True, use_container_width=True)
+                # Lo pasamos por style para ocultar los números laterales y lo hacemos tabla fija
+                st.table(resumen.style.hide(axis="index"))
                 
                 if st.button("⏭️ Avanzar a la Siguiente Hora", type="primary", use_container_width=True):
                     sala["ronda_actual"] += 1
@@ -461,8 +463,10 @@ if st.session_state.rol == "jugador":
                 estilos[0] = (est + ' font-weight: bold; border-right: 2px solid gray;') if est else 'font-weight: bold; border-right: 2px solid gray;'
                 return estilos
 
-            styled_df = df_display.style.apply(aplicar_colores, axis=1)
-            st.dataframe(styled_df, hide_index=True, use_container_width=True)
+            # Ocultamos el índice al aplicar el estilo
+            styled_df = df_display.style.hide(axis="index").apply(aplicar_colores, axis=1)
+            # Imprimimos tabla inamovible
+            st.table(styled_df)
             
             st.markdown(f"<h3 style='text-align: right; color: #1e3a8a;'>💵 SALDO TOTAL: {saldo_actual:,.0f} €</h3>", unsafe_allow_html=True)
             st.info("Esperando a que el Operador del Mercado (Host) inicie la siguiente hora...")
