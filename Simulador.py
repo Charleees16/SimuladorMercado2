@@ -350,10 +350,9 @@ if st.session_state.rol == "jugador":
 
     # FASE: VER RESULTADOS PRIVADOS
     elif sala["fase"] == "resultados":
-        st.markdown(f"<h3 style='text-align: right; color: #1e3a8a;'>💵 SALDO TOTAL: {saldo_actual:,.0f} €</h3>", unsafe_allow_html=True)
-            st.info("Esperando a que el Operador del Mercado (Host) inicie la siguiente hora...")
-            # 👇 REEMPLAZAR EL BOTÓN POR ESTO:
-            st_autorefresh(interval=2000, key="refresh_jugador_resultados")
+        if sala["hubo_apagon"]:
+            st.error("🚨 ¡APAGÓN! No se cubrió la demanda. Prepárate para rehacer la oferta.")
+            st_autorefresh(interval=2000, key="refresh_jugador_apagon")
         else:
             st.success("✅ Mercado Casado. Aquí están tus resultados.")
             
@@ -362,7 +361,7 @@ if st.session_state.rol == "jugador":
             
             saldo_actual = sala["dinero_acumulado"][mi_equipo]
             
-            # Reutilizamos tu código exacto de la tabla bonita adaptado a "datos_mios"
+            # Tabla bonita adaptada a datos_mios
             tecnologias_orden = ["Nuclear", "Carbón", "Ciclo Combinado", "Gas"]
             emojis_tech = {"Nuclear": "☢️ Nuclear", "Carbón": "🪨 Carbón", "Ciclo Combinado": "💨 Ciclo", "Gas": "🔥 Gas"}
             
@@ -408,4 +407,6 @@ if st.session_state.rol == "jugador":
             
             st.markdown(f"<h3 style='text-align: right; color: #1e3a8a;'>💵 SALDO TOTAL: {saldo_actual:,.0f} €</h3>", unsafe_allow_html=True)
             st.info("Esperando a que el Operador del Mercado (Host) inicie la siguiente hora...")
-            st.button("🔄 Refrescar")
+            
+            # 👇 REFRESCO AUTOMÁTICO EN VEZ DEL BOTÓN
+            st_autorefresh(interval=2000, key="refresh_jugador_resultados")
