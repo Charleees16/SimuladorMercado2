@@ -396,11 +396,7 @@ if st.session_state.rol == "host":
                     <p style="color: #94a3b8; margin: 0 0 20px 0; font-size: 1rem;">
                         Las centrales más baratas venden primero. El precio lo fija <b style="color:#fb923c;">la última necesaria</b> para cubrir la demanda.
                     </p>
-
-                    <!-- Contenedor principal del gráfico -->
                     <div style="display: flex; gap: 12px; align-items: flex-end;">
-
-                        <!-- Eje Y -->
                         <div style="display: flex; flex-direction: column; justify-content: space-between; height: 300px; padding-bottom: 0; color: #94a3b8; font-size: 0.75rem; text-align: right; min-width: 48px;">
                             <span>{precio_max_visual:,.0f}€</span>
                             <span>{precio_max_visual*0.75:,.0f}€</span>
@@ -408,48 +404,15 @@ if st.session_state.rol == "host":
                             <span>{precio_max_visual*0.25:,.0f}€</span>
                             <span>0€</span>
                         </div>
-
-                        <!-- Área del gráfico -->
-                        <div style="
-                            flex: 1;
-                            height: 300px;
-                            position: relative;
-                            border-left: 2px solid #475569;
-                            border-bottom: 2px solid #475569;
-                            display: flex;
-                            align-items: flex-end;
-                        ">
-                            <!-- Línea precio marginal -->
-                            <div style="
-                                position: absolute;
-                                bottom: {pct_linea:.2f}%;
-                                left: 0; right: 0;
-                                border-top: 2px dashed #fb923c;
-                                z-index: 10;
-                            "></div>
-                            <!-- Etiqueta precio marginal -->
-                            <div style="
-                                position: absolute;
-                                bottom: calc({pct_linea:.2f}% + 4px);
-                                right: 8px;
-                                background: #ea580c;
-                                color: white;
-                                padding: 2px 8px;
-                                border-radius: 6px;
-                                font-weight: bold;
-                                font-size: 0.85rem;
-                                z-index: 11;
-                            ">💰 {precio_cierre:,.2f} €/MWh</div>
-
-                            <!-- Barras -->
+                        <div style="flex: 1; height: 300px; position: relative; border-left: 2px solid #475569; border-bottom: 2px solid #475569; display: flex; align-items: flex-end;">
+                            <div style="position: absolute; bottom: {pct_linea:.2f}%; left: 0; right: 0; border-top: 2px dashed #fb923c; z-index: 10;"></div>
+                            <div style="position: absolute; bottom: calc({pct_linea:.2f}% + 4px); right: 8px; background: #ea580c; color: white; padding: 2px 8px; border-radius: 6px; font-weight: bold; font-size: 0.85rem; z-index: 11;">💰 {precio_cierre:,.2f} €/MWh</div>
                             <div style="display: flex; align-items: flex-end; width: 100%; height: 100%; gap: 2px; padding: 0 4px; box-sizing: border-box;">
                                 {html_barra_reno}
                                 {html_barras}
                             </div>
                         </div>
                     </div>
-
-                    <!-- Leyenda -->
                     <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px;">
                         <span style="background:{TECH_CONFIG_GRAFICA['Renovables']['color']}; border: 1px solid {TECH_CONFIG_GRAFICA['Renovables']['color_borde']}; padding: 3px 10px; border-radius: 20px; font-size:0.8rem;">🌱 Renovables</span>
                         <span style="background:{TECH_CONFIG_GRAFICA['Nuclear']['color']}; border: 1px solid {TECH_CONFIG_GRAFICA['Nuclear']['color_borde']}; padding: 3px 10px; border-radius: 20px; font-size:0.8rem;">⚛️ Nuclear</span>
