@@ -28,146 +28,103 @@ HORARIOS = [
 ]
 
 def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
-    # 4. Mapeo exacto de los emojis que pediste
+    # 1. Diccionarios actualizados con nuevos iconos y colores
     DICT_NOMBRES_EMOJIS = {
-        "Nuclear": "☢️ Nuclear",
+        "Nuclear": "⚛️ Nuclear",
         "Carbón": "⚫ Carbón",
-        "Ciclo Combinado": "☁️ Ciclo",
-        "Gas": "🔥 Gas"
+        "Ciclo Combinado": "🌀 Ciclo",
+        "Gas": "💨 Gas"  # Icono de gas/vapor que renderiza mejor
     }
     
-    # Colores actualizados para los nuevos nombres
     COLORES_TECH = {
-        "☢️ Nuclear": "#62ff3b",
-        "⚫ Carbón":  "#4e4859",
-        "☁️ Ciclo":   "#322fc4",
-        "🔥 Gas":     "#f7b10c",
+        "⚛️ Nuclear": "#62ff3b", # Verde
+        "⚫ Carbón":  "#4e4859", # Gris Oscuro
+        "🌀 Ciclo":   "#322fc4", # Azul
+        "💨 Gas":     "#f7b10c", # Naranja Suave
     }
 
     df_sorted = df_resultado.sort_values("Precio (€/MWh)").reset_index(drop=True)
-    # Aplicar el cambio de nombre con emojis al dataframe antes de procesarlo
     df_sorted["Tecnología"] = df_sorted["Tecnología"].map(lambda x: DICT_NOMBRES_EMOJIS.get(x, x))
     df_sorted = df_sorted[df_sorted["Potencia Ofertada (MW)"] > 0]
 
-    # --- PARCHE DE SEGURIDAD: Si la gente oferta 0 MW ---
     if df_sorted.empty:
         fig, ax = plt.subplots(figsize=(10, 5))
         ax.text(0.5, 0.5, "Nadie ofertó potencia.\nMercado desierto.", ha='center', va='center', fontsize=15, color="red")
         ax.axis('off')
         return fig
 
-    total_ofertado   = df_sorted["Potencia Ofertada (MW)"].sum()
-    
-    # --- PARCHE DE SEGURIDAD: Evitar errores de max() con NaN ---
+    total_ofertado = df_sorted["Potencia Ofertada (MW)"].sum()
     max_precio_ofertado = df_sorted["Precio (€/MWh)"].max()
-    if pd.isna(max_precio_ofertado):
-        max_precio_ofertado = 0
-        
-    # Límite Y para el gráfico
-    max_price_display = max(180, precio_marginal * 1.3, max_precio_ofertado * 1.1)
+    if pd.isna(max_precio_ofertado): max_precio_ofertado = 0
     
-    # Definimos colores discretos para las marcas numéricas
-    COLOR_EJES = "#7c7c7c" # Gris discreto
-    COLOR_GRID = "#e8e8e8" # Gris muy claro para la cuadrícula
+    max_price_display = max(180, precio_marginal * 1.3, max_precio_ofertado * 1.1)
+    COLOR_EJES = "#7c7c7c"
+    COLOR_GRID = "#e8e8e8"
     
     fig, ax = plt.subplots(figsize=(10, 5))
     fig.patch.set_facecolor("#FFFFFF")
     ax.set_facecolor("#FFFFFF")
 
-    cumulative   = 0
-    # Guardaremos info para las etiquetas de texto de tecnologías
-    # (x_center, tech_name, price)
-    tech_regions = [] 
+    cumulative = 0
+    labels_agregadas = set() # Para no duplicar items en la leyenda
 
     for _, row in df_sorted.iterrows():
         tech   = row["Tecnología"]
         mw     = row["Potencia Ofertada (MW)"]
         price  = row["Precio (€/MWh)"]
 
-        # Calculamos la posición X en porcentaje de la Demanda Residual
         x_start = (cumulative / demanda_residual) * 100
-        x_width = (mw          / demanda_residual) * 100
+        x_width = (mw / demanda_residual) * 100
 
-        # 2. Lógica de colores basada en si el bloque empieza ANTES del 100%
+        # Lógica de color y etiqueta para la leyenda
         if x_start < 100:
             color = COLORES_TECH.get(tech, "#F5B731")
+            # Solo añadimos el label la primera vez que aparece la tecnología
+            label_leyenda = tech if tech not in labels_agregadas else None
+            labels_agregadas.add(tech)
         else:
-            color = "#f3f3f3" # Gris muy claro para ofertas descartadas
+            color = "#f3f3f3"
+            label_leyenda = None
 
         rect = plt.Rectangle(
             (x_start, 0), x_width, price,
-            facecolor=color, edgecolor="white", linewidth=1.5, zorder=2
+            facecolor=color, edgecolor="white", linewidth=1, 
+            zorder=2, label=label_leyenda
         )
         ax.add_patch(rect)
-
-        # Info para la etiqueta de texto central del bloque
-        tech_regions.append(((x_start + x_start + x_width) / 2, tech, price))
         cumulative += mw
 
-    # ── Área amarilla de cobertura de Demanda ────────────────────────────────────
-    ax.fill_between([0, 100], 0, precio_marginal,
-                    color="#FEFCE8", alpha=0.9, zorder=0)
+    # --- Elementos visuales de fondo ---
+    ax.fill_between([0, 100], 0, precio_marginal, color="#FEFCE8", alpha=0.9, zorder=0)
+    ax.hlines(precio_marginal, 0, 100, colors="#1E3A8A", linestyles="--", linewidth=1.5, zorder=4)
+    ax.vlines(100, 0, precio_marginal, colors="#1E3A8A", linestyles="--", linewidth=1.5, zorder=4)
+    ax.plot(100, precio_marginal, "o", color="#fc0303", markersize=8, zorder=5)
 
-    # ── Líneas punteadas del precio marginal ──────────────────────────────────
-    ax.hlines(precio_marginal, 0, 100,
-              colors="#1E3A8A", linestyles="--", linewidth=1.8, zorder=4)
-    ax.vlines(100, 0, precio_marginal,
-              colors="#1E3A8A", linestyles="--", linewidth=1.8, zorder=4)
-
-    # ── Punto rojo en la intersección (User pidió: #fc0303) ───────────────────
-    ax.plot(100, precio_marginal, "o",
-            color="#fc0303", markersize=9, zorder=5)
-
-    # 2. ELIMINADA EL TEXTO SOLAPADO: Borrada la línea xtick_labels.append("100%\n(Demanda)")
-    
-    # ── Estilo DISCRETO de los Ejes ──────────────────────────────────────────
-    # Ocultar spines (líneas de contorno)
+    # --- Configuración de Ejes ---
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    # ax.spines["left"].set_visible(False) # Si los quieres ocultos del todo
-    # ax.spines["bottom"].set_visible(False) # Si los quieres ocultos del todo
-    
-    # Colorear spines que quedan visibles
     ax.spines["left"].set_color(COLOR_EJES)
     ax.spines["bottom"].set_color(COLOR_EJES)
-    ax.tick_params(colors=COLOR_EJES, length=5, width=0.8, labelsize=10)
     
-    # Configurar cuadrícula de fondo tenue y discreta
-    ax.grid(axis='y', linestyle='-', color=COLOR_GRID, linewidth=0.6, zorder=1)
-
-    # 3. NÚMEROS DISCRETOS Y ORDENADOS EN LOS EJES ──────────────────────────────────
     x_limit = max(110, (total_ofertado / demanda_residual) * 100)
-    ax.set_xlim(-2, x_limit)
+    ax.set_xlim(-1, x_limit)
     ax.set_ylim(0, max_price_display)
 
-    # Eje X: Marcas numéricas de porcentaje discreto (cada 50%)
     ax.xaxis.set_major_locator(ticker.MultipleLocator(50))
-    # Eje X: Marcas pequeñas (cada 25%) sin texto (solo ticks)
-    ax.xaxis.set_minor_locator(ticker.MultipleLocator(25))
-    ax.xaxis.set_major_formatter(ticker.PercentFormatter()) # Formatea como "%"
-    
-    # Eje Y: Marcas numéricas discretas de precio (cada 50€)
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(50))
-    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d€')) # Formatea como "€"
+    ax.xaxis.set_major_formatter(ticker.PercentFormatter())
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d€'))
+    ax.grid(axis='y', linestyle='-', color=COLOR_GRID, linewidth=0.5, zorder=1)
 
-    # Etiquetas de tecnología y Porcentajes en X ────────────────────────────
-    # Añadimos los nombres de las tecnologías directamente COMO TEXTO encima del eje bottom, 
-    # para que no choquen con las marcas numéricas de porcentaje que están abajo.
-    for pos_x, tech_name, price in tech_regions:
-        # Solo dibujamos texto si el bloque es lo suficientemente ancho
-        if pos_x < x_limit:
-            # Texto rotado para ahorrar espacio, ligeramente tenue, encima del eje bottom
-            ax.text(pos_x, - (max_price_display * 0.01) , tech_name, 
-                    fontsize=10, color="#6B7280", rotation=0, 
-                    ha='center', va='top', fontweight="normal", zorder=6)
-    
-    # Añadimos un pequeño indicador discreto del Precio Marginal en el gráfico
-    # encima de la línea punteada para dar contexto
-    ax.text(102, precio_marginal + (max_price_display * 0.01), f"Marginal\n{precio_marginal:,.2f} €", 
-            fontsize=9, color="#1E3A8A", ha='left', va='bottom', fontweight="bold", zorder=6)
+    # --- Indicador de Precio Marginal ---
+    ax.text(101, precio_marginal + (max_price_display * 0.02), f"Marginal: {precio_marginal:,.2f} €", 
+            fontsize=10, color="#1E3A8A", ha='left', va='bottom', fontweight="bold", zorder=6)
+
+    # --- LEYENDA (La clave de la limpieza) ---
+    # La colocamos fuera del gráfico, abajo al centro
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.12),
+              ncol=4, frameon=False, fontsize=10, handlelength=1.5)
 
     plt.tight_layout()
-    # plt.show() # Para testear localmente
     return fig
     
 # --- ENRUTADOR MÁGICO ---
