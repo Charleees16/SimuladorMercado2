@@ -3,6 +3,9 @@ import pandas as pd
 import qrcode
 import random
 from streamlit_autorefresh import st_autorefresh
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import numpy as np
 
 # streamlit run SimuladorEquipos.py
 
@@ -22,6 +25,101 @@ HORARIOS = [
     {"hora": "11:00 - 12:00", "demanda": 9100, "renovables": 4100},
     {"hora": "12:00 - 13:00", "demanda": 8750, "renovables": 2750},
 ]
+
+def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
+    COLORES_TECH = {
+        "Nuclear":         "#F5B731",
+        "Carbón":          "#BDBDBD",
+        "Ciclo Combinado": "#D4D4D4",
+        "Gas":             "#9E9E9E",
+    }
+
+    df_sorted = df_resultado.sort_values("Precio (€/MWh)").reset_index(drop=True)
+    df_sorted = df_sorted[df_sorted["Potencia Ofertada (MW)"] > 0]
+
+    total_ofertado   = df_sorted["Potencia Ofertada (MW)"].sum()
+    max_price_display = max(precio_marginal * 1.45, df_sorted["Precio (€/MWh)"].max() * 1.2)
+
+    fig, ax = plt.subplots(figsize=(10, 5))
+    fig.patch.set_facecolor("#FFFFFF")
+    ax.set_facecolor("#FFFFFF")
+
+    cumulative   = 0
+    tech_ranges  = {}   # tech -> [(x_start, x_end), ...]
+
+    for _, row in df_sorted.iterrows():
+        tech   = row["Tecnología"]
+        mw     = row["Potencia Ofertada (MW)"]
+        price  = row["Precio (€/MWh)"]
+        color  = COLORES_TECH.get(tech, "#AAAAAA")
+
+        x_start = (cumulative / demanda_residual) * 100
+        x_width = (mw          / demanda_residual) * 100
+
+        rect = plt.Rectangle(
+            (x_start, 0), x_width, price,
+            facecolor=color, edgecolor="white", linewidth=1.5, zorder=2
+        )
+        ax.add_patch(rect)
+
+        tech_ranges.setdefault(tech, []).append((x_start, x_start + x_width))
+        cumulative += mw
+
+    # ── Área amarilla ──────────────────────────────────────────────────────────
+    demand_pct = min((cumulative / demanda_residual) * 100, 100)
+    ax.fill_between([0, 100], 0, precio_marginal,
+                    color="#FEFCE8", alpha=0.85, zorder=0)
+
+    # ── Líneas punteadas del precio marginal ───────────────────────────────────
+    ax.hlines(precio_marginal, 0, 100,
+              colors="#1E3A8A", linestyles="--", linewidth=1.6, zorder=4)
+    ax.vlines(100, 0, precio_marginal,
+              colors="#1E3A8A", linestyles="--", linewidth=1.6, zorder=4)
+
+    # ── Punto azul en la intersección ─────────────────────────────────────────
+    ax.plot(100, precio_marginal, "o",
+            color="#1E3A8A", markersize=9, zorder=5)
+
+    # ── Anotación con flecha ───────────────────────────────────────────────────
+    x_max_data = max((total_ofertado / demanda_residual) * 100, 100) * 1.4
+    ax.annotate(
+        "Pero el precio de la electricidad\n"
+        "no es el que ofrece cada central\n"
+        "eléctrica, sino que se fija en el\n"
+        "precio que haya ofrecido la más\n"
+        "cara de ellas en último lugar.",
+        xy   =(101, precio_marginal),
+        xytext=(115, precio_marginal * 0.62),
+        arrowprops=dict(arrowstyle="->", color="#6B7280", lw=1.2),
+        fontsize=8.5, color="#4B5563",
+        va="center", ha="left",
+    )
+
+    # ── Ejes ──────────────────────────────────────────────────────────────────
+    ax.set_xlim(-3, x_max_data)
+    ax.set_ylim(0, max_price_display)
+    ax.set_xlabel("%", fontsize=12, labelpad=8,  color="#4B5563")
+    ax.set_ylabel("€", fontsize=12, labelpad=12, color="#4B5563", rotation=0)
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#E5E7EB")
+    ax.spines["bottom"].set_color("#E5E7EB")
+    ax.tick_params(colors="#9CA3AF", length=0)
+    ax.set_yticks([])   # sin números en Y, igual que la referencia
+
+    # ── Etiquetas de tecnología centradas bajo cada bloque ────────────────────
+    xtick_pos, xtick_labels = [], []
+    for tech, ranges in tech_ranges.items():
+        center = (min(r[0] for r in ranges) + max(r[1] for r in ranges)) / 2
+        xtick_pos.append(center)
+        xtick_labels.append(tech)
+
+    ax.set_xticks(xtick_pos)
+    ax.set_xticklabels(xtick_labels, fontsize=9, color="#6B7280")
+
+    plt.tight_layout()
+    return fig
 
 # --- ENRUTADOR MÁGICO ---
 params = st.query_params
@@ -295,6 +393,16 @@ if st.session_state.rol == "host":
                     st.rerun()
             else:
                 st.success(f"### 💰 Precio Final del Mercado: {sala['precio_marginal']:,.2f} €/MWh")
+
+                # ── GRÁFICA MERIT ORDER ──────────────────────────────────────────
+                datos_hora_res  = HORARIOS[ronda]
+                demanda_res_now = datos_hora_res["demanda"] - datos_hora_res["renovables"]
+                df_res = pd.DataFrame(sala["resultados_df"])
+                fig_merit = grafico_merit_order(df_res, demanda_res_now, sala["precio_marginal"])
+                st.pyplot(fig_merit)
+                plt.close(fig_merit)
+                # ─────────────────────────────────────────────────────────────────
+                
                 
                 # Resumen de beneficios para el profe
                 df_res = pd.DataFrame(sala["resultados_df"])
