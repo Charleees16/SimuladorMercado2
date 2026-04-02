@@ -23,6 +23,15 @@ HORARIOS = [
     {"hora": "12:00 - 13:00", "demanda": 8750, "renovables": 2750},
 ]
 
+
+TECH_CONFIG_GRAFICA = {
+    "Renovables": {"icon": "🌱", "color": "#a7f3d0", "color_borde": "#16a34a", "texto_borde": "#15803d"},
+    "Nuclear": {"icon": "⚛️", "color": "#fef08a", "color_borde": "#ca8a04", "texto_borde": "#a16207"},
+    "Carbón": {"icon": "🪨", "color": "#d1d5db", "color_borde": "#4b5563", "texto_borde": "#374151"},
+    "Ciclo Combinado": {"icon": "💨", "color": "#bfdbfe", "color_borde": "#3b82f6", "texto_borde": "#1e40af"},
+    "Gas": {"icon": "🔥", "color": "#fca5a5", "color_borde": "#dc2626", "texto_borde": "#991b1b"},
+}
+
 # --- ENRUTADOR MÁGICO ---
 params = st.query_params
 sala_url = params.get("sala", None)
@@ -283,30 +292,185 @@ if st.session_state.rol == "host":
                         sala["fase"] = "resultados"
                         st.rerun()
 
-        # FASE: RESULTADOS GLOBALES (HOST)
-        elif sala["fase"] == "resultados":
-            if sala["hubo_apagon"]:
-                st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
-                st.error("El sistema eléctrico está al borde del colapso. El mercado ha sido anulado.")
-                if st.button("🔄 Obligar a rehacer Ofertas", type="primary"):
-                    sala["fase"] = "ofertando"
-                    sala["ofertas"] = {}
-                    sala["hubo_apagon"] = False
-                    st.rerun()
-            else:
-                st.success(f"### 💰 Precio Final del Mercado: {sala['precio_marginal']:,.2f} €/MWh")
-                
-                # Resumen de beneficios para el profe
-                df_res = pd.DataFrame(sala["resultados_df"])
-                resumen = df_res.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
-                # Lo pasamos por style para ocultar los números laterales y lo hacemos tabla fija
-                st.table(resumen.style.hide(axis="index"))
-                
-                if st.button("⏭️ Avanzar a la Siguiente Hora", type="primary", use_container_width=True):
-                    sala["ronda_actual"] += 1
-                    sala["fase"] = "ofertando"
-                    sala["ofertas"] = {}
-                    st.rerun()
+            # FASE: RESULTADOS GLOBALES (HOST)
+            elif sala["fase"] == "resultados":
+                if sala["hubo_apagon"]:
+                    st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
+                    st.error("El sistema eléctrico está al borde del colapso. El mercado ha sido anulado.")
+                    if st.button("🔄 Obligar a rehacer Ofertas", type="primary"):
+                        sala["fase"] = "ofertando"
+                        sala["ofertas"] = {}
+                        sala["hubo_apagon"] = False
+                        st.rerun()
+                else:
+                    precio_cierre = sala['precio_marginal']
+                    st.success(f"### 💰 Precio de Cierre del Mercado: {precio_cierre:,.2f} €/MWh")
+    
+                    # --- GRÁFICA DE ORDEN DE MÉRITO ---
+                    df_res = pd.DataFrame(sala["resultados_df"])
+    
+                    # Todas las ofertas ordenadas por precio (orden de mérito completo)
+                    df_graf = df_res.sort_values(by="Precio (€/MWh)").reset_index(drop=True)
+    
+                    # Calculamos la potencia total despachada para escalar el gráfico
+                    potencia_total_graf = df_graf["Potencia Ofertada (MW)"].sum()
+                    renovables_mw = datos_hora["renovables"]
+                    potencia_total_graf += renovables_mw  # incluimos renovables en el ancho total
+    
+                    # Altura máxima = precio marginal * 1.25 para que haya margen arriba
+                    precio_max_visual = precio_cierre * 1.3 if precio_cierre > 0 else 100
+    
+                    # Construimos las barritas de tecnologías convencionales
+                    html_barras = ""
+                    for _, r in df_graf.iterrows():
+                        tech = r['Tecnología']
+                        cfg = TECH_CONFIG_GRAFICA.get(tech, {"icon": "⚡", "color": "#e5e7eb", "color_borde": "#6b7280", "texto_borde": "#374151"})
+                        potencia = r["Potencia Ofertada (MW)"]
+                        precio = r["Precio (€/MWh)"]
+                        asignada = r["Potencia Asignada (MW)"]
+    
+                        # Altura de la barra proporcional al precio
+                        pct_altura = min((precio / precio_max_visual) * 100, 100)
+                        # Ancho proporcional a la potencia
+                        pct_ancho = (potencia / potencia_total_graf) * 100
+    
+                        # Borde más grueso si es la barra marginal (la que fija el precio)
+                        es_marginal = abs(precio - precio_cierre) < 0.01 and asignada > 0
+                        borde_extra = f"box-shadow: 0 0 0 3px #ea580c; z-index: 5;" if es_marginal else ""
+    
+                        html_barras += f"""
+                        <div style="
+                            position: relative;
+                            width: {pct_ancho:.2f}%;
+                            height: {pct_altura:.2f}%;
+                            background-color: {cfg['color']};
+                            border: 2px solid {cfg['color_borde']};
+                            border-bottom: none;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: flex-start;
+                            padding-top: 4px;
+                            box-sizing: border-box;
+                            {borde_extra}
+                        ">
+                            <span style="font-size: 1.3rem;">{cfg['icon']}</span>
+                            <span style="font-size: 0.7rem; font-weight: bold; color: {cfg['color_borde']}; text-align:center; line-height:1.1;">
+                                {precio:,.0f}€<br/>{potencia:,.0f}MW
+                            </span>
+                        </div>
+                        """
+    
+                    # Barra de renovables (va primero, más a la izquierda, precio = 0)
+                    pct_ancho_reno = (renovables_mw / potencia_total_graf) * 100
+                    cfg_reno = TECH_CONFIG_GRAFICA["Renovables"]
+                    html_barra_reno = f"""
+                    <div style="
+                        width: {pct_ancho_reno:.2f}%;
+                        height: 15%;
+                        background-color: {cfg_reno['color']};
+                        border: 2px solid {cfg_reno['color_borde']};
+                        border-bottom: none;
+                        display: flex;
+                        flex-direction: column;
+                        align-items: center;
+                        justify-content: flex-start;
+                        padding-top: 4px;
+                        box-sizing: border-box;
+                    ">
+                        <span style="font-size: 1.3rem;">{cfg_reno['icon']}</span>
+                        <span style="font-size: 0.7rem; font-weight: bold; color: {cfg_reno['color_borde']}; text-align:center; line-height:1.1;">
+                            0€<br/>{renovables_mw:,.0f}MW
+                        </span>
+                    </div>
+                    """
+    
+                    # Línea del precio marginal: en % de altura
+                    pct_linea = min((precio_cierre / precio_max_visual) * 100, 99)
+    
+                    html_grafica_completa = f"""
+                    <div style="background: #0f172a; padding: 24px; border-radius: 16px; border: 2px solid #334155; margin: 16px 0;">
+                        <h2 style="color: #f1f5f9; margin: 0 0 4px 0;">📊 Orden de Mérito — Ronda {ronda + 1} ({datos_hora['hora']})</h2>
+                        <p style="color: #94a3b8; margin: 0 0 20px 0; font-size: 1rem;">
+                            Las centrales más baratas venden primero. El precio lo fija <b style="color:#fb923c;">la última necesaria</b> para cubrir la demanda.
+                        </p>
+    
+                        <!-- Contenedor principal del gráfico -->
+                        <div style="display: flex; gap: 12px; align-items: flex-end;">
+    
+                            <!-- Eje Y -->
+                            <div style="display: flex; flex-direction: column; justify-content: space-between; height: 300px; padding-bottom: 0; color: #94a3b8; font-size: 0.75rem; text-align: right; min-width: 48px;">
+                                <span>{precio_max_visual:,.0f}€</span>
+                                <span>{precio_max_visual*0.75:,.0f}€</span>
+                                <span>{precio_max_visual*0.5:,.0f}€</span>
+                                <span>{precio_max_visual*0.25:,.0f}€</span>
+                                <span>0€</span>
+                            </div>
+    
+                            <!-- Área del gráfico -->
+                            <div style="
+                                flex: 1;
+                                height: 300px;
+                                position: relative;
+                                border-left: 2px solid #475569;
+                                border-bottom: 2px solid #475569;
+                                display: flex;
+                                align-items: flex-end;
+                            ">
+                                <!-- Línea precio marginal -->
+                                <div style="
+                                    position: absolute;
+                                    bottom: {pct_linea:.2f}%;
+                                    left: 0; right: 0;
+                                    border-top: 2px dashed #fb923c;
+                                    z-index: 10;
+                                "></div>
+                                <!-- Etiqueta precio marginal -->
+                                <div style="
+                                    position: absolute;
+                                    bottom: calc({pct_linea:.2f}% + 4px);
+                                    right: 8px;
+                                    background: #ea580c;
+                                    color: white;
+                                    padding: 2px 8px;
+                                    border-radius: 6px;
+                                    font-weight: bold;
+                                    font-size: 0.85rem;
+                                    z-index: 11;
+                                ">💰 {precio_cierre:,.2f} €/MWh</div>
+    
+                                <!-- Barras -->
+                                <div style="display: flex; align-items: flex-end; width: 100%; height: 100%; gap: 2px; padding: 0 4px; box-sizing: border-box;">
+                                    {html_barra_reno}
+                                    {html_barras}
+                                </div>
+                            </div>
+                        </div>
+    
+                        <!-- Leyenda -->
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px;">
+                            <span style="background:{TECH_CONFIG_GRAFICA['Renovables']['color']}; border: 1px solid {TECH_CONFIG_GRAFICA['Renovables']['color_borde']}; padding: 3px 10px; border-radius: 20px; font-size:0.8rem;">🌱 Renovables</span>
+                            <span style="background:{TECH_CONFIG_GRAFICA['Nuclear']['color']}; border: 1px solid {TECH_CONFIG_GRAFICA['Nuclear']['color_borde']}; padding: 3px 10px; border-radius: 20px; font-size:0.8rem;">⚛️ Nuclear</span>
+                            <span style="background:{TECH_CONFIG_GRAFICA['Carbón']['color']}; border: 1px solid {TECH_CONFIG_GRAFICA['Carbón']['color_borde']}; padding: 3px 10px; border-radius: 20px; font-size:0.8rem;">🪨 Carbón</span>
+                            <span style="background:{TECH_CONFIG_GRAFICA['Ciclo Combinado']['color']}; border: 1px solid {TECH_CONFIG_GRAFICA['Ciclo Combinado']['color_borde']}; padding: 3px 10px; border-radius: 20px; font-size:0.8rem;">💨 Ciclo Combinado</span>
+                            <span style="background:{TECH_CONFIG_GRAFICA['Gas']['color']}; border: 1px solid {TECH_CONFIG_GRAFICA['Gas']['color_borde']}; padding: 3px 10px; border-radius: 20px; font-size:0.8rem;">🔥 Gas</span>
+                            <span style="background:#1e293b; border: 2px solid #ea580c; padding: 3px 10px; border-radius: 20px; font-size:0.8rem; color:white;">🔶 Barra marginal</span>
+                        </div>
+                    </div>
+                    """
+    
+                    st.markdown(html_grafica_completa, unsafe_allow_html=True)
+    
+                    # Tabla resumen de beneficios
+                    df_res_bruto = pd.DataFrame(sala["resultados_df"])
+                    resumen_profe = df_res_bruto.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
+                    st.table(resumen_profe.style.hide(axis="index"))
+    
+                    if st.button("⏭️ Avanzar a la Siguiente Hora", type="primary", use_container_width=True):
+                        sala["ronda_actual"] += 1
+                        sala["fase"] = "ofertando"
+                        sala["ofertas"] = {}
+                        st.rerun()
 
 # ==========================================
 # 📱 VISTA DEL JUGADOR (EMPRESA)
