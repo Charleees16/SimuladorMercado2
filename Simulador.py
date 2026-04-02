@@ -27,14 +27,25 @@ HORARIOS = [
 ]
 
 def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
+    # 4. Mapeo exacto de los emojis que pediste
+    DICT_NOMBRES_EMOJIS = {
+        "Nuclear": "☢️ Nuclear",
+        "Carbón": "🪨 Carbón",
+        "Ciclo Combinado": "💨 Ciclo",
+        "Gas": "🔥 Gas"
+    }
+    
+    # Colores actualizados para los nuevos nombres
     COLORES_TECH = {
-        "Nuclear":         "#F5B731",
-        "Carbón":          "#BDBDBD",
-        "Ciclo Combinado": "#D4D4D4",
-        "Gas":             "#9E9E9E",
+        "☢️ Nuclear": "#F5B731",
+        "🪨 Carbón":  "#57534E",
+        "💨 Ciclo":   "#A8A29E",
+        "🔥 Gas":     "#D6D3D1",
     }
 
     df_sorted = df_resultado.sort_values("Precio (€/MWh)").reset_index(drop=True)
+    # Aplicar el cambio de nombre con emojis al dataframe antes de procesarlo
+    df_sorted["Tecnología"] = df_sorted["Tecnología"].map(lambda x: DICT_NOMBRES_EMOJIS.get(x, x))
     df_sorted = df_sorted[df_sorted["Potencia Ofertada (MW)"] > 0]
 
     # --- PARCHE DE SEGURIDAD: Si la gente oferta 0 MW ---
@@ -53,23 +64,29 @@ def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
         
     max_price_display = max(precio_marginal * 1.45, max_precio_ofertado * 1.2)
     if max_price_display <= 0:
-        max_price_display = 100 # Límite Y por defecto para que no rompa
+        max_price_display = 100 
     
     fig, ax = plt.subplots(figsize=(10, 5))
     fig.patch.set_facecolor("#FFFFFF")
     ax.set_facecolor("#FFFFFF")
 
     cumulative   = 0
-    tech_ranges  = {}   # tech -> [(x_start, x_end), ...]
+    tech_ranges  = {}
 
     for _, row in df_sorted.iterrows():
         tech   = row["Tecnología"]
         mw     = row["Potencia Ofertada (MW)"]
         price  = row["Precio (€/MWh)"]
-        color  = COLORES_TECH.get(tech, "#AAAAAA")
 
         x_start = (cumulative / demanda_residual) * 100
         x_width = (mw          / demanda_residual) * 100
+
+        # 2. Lógica de colores: si empieza antes del 100%, se colorea (incluye la marginal).
+        # Si empieza en el 100% o más tarde, se queda en gris claro (descartadas).
+        if x_start < 100:
+            color = COLORES_TECH.get(tech, "#F5B731")
+        else:
+            color = "#F3F4F6" # Gris muy claro para las ofertas no casadas
 
         rect = plt.Rectangle(
             (x_start, 0), x_width, price,
@@ -95,43 +112,36 @@ def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
     ax.plot(100, precio_marginal, "o",
             color="#1E3A8A", markersize=9, zorder=5)
 
-    # ── Anotación con flecha ───────────────────────────────────────────────────
-    x_max_data = max((total_ofertado / demanda_residual) * 100, 100) * 1.4
-    ax.annotate(
-        "Pero el precio de la electricidad\n"
-        "no es el que ofrece cada central\n"
-        "eléctrica, sino que se fija en el\n"
-        "precio que haya ofrecido la más\n"
-        "cara de ellas en último lugar.",
-        xy   =(101, precio_marginal),
-        xytext=(115, precio_marginal * 0.62),
-        arrowprops=dict(arrowstyle="->", color="#6B7280", lw=1.2),
-        fontsize=8.5, color="#4B5563",
-        va="center", ha="left",
-    )
+    # 1. ELIMINADA la anotación con flecha y texto largo para una gráfica limpia
 
     # ── Ejes ──────────────────────────────────────────────────────────────────
+    x_max_data = max((total_ofertado / demanda_residual) * 100, 100) * 1.1 # Reducido un poco el espacio derecho al quitar el texto
     ax.set_xlim(-3, x_max_data)
     ax.set_ylim(0, max_price_display)
-    ax.set_xlabel("%", fontsize=12, labelpad=8,  color="#4B5563")
-    ax.set_ylabel("€", fontsize=12, labelpad=12, color="#4B5563", rotation=0)
 
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
     ax.spines["left"].set_color("#E5E7EB")
     ax.spines["bottom"].set_color("#E5E7EB")
-    ax.tick_params(colors="#9CA3AF", length=0)
-    ax.set_yticks([])   # sin números en Y, igual que la referencia
+    ax.tick_params(colors="#4B5563", length=4)
 
-    # ── Etiquetas de tecnología centradas bajo cada bloque ────────────────────
+    # ── Etiquetas de tecnología y Porcentajes en X ────────────────────────────
     xtick_pos, xtick_labels = [], []
     for tech, ranges in tech_ranges.items():
         center = (min(r[0] for r in ranges) + max(r[1] for r in ranges)) / 2
         xtick_pos.append(center)
         xtick_labels.append(tech)
 
+    # 3. Añadimos el 100% explícitamente en el eje X
+    xtick_pos.append(100)
+    xtick_labels.append("100%\n(Demanda)")
+
     ax.set_xticks(xtick_pos)
-    ax.set_xticklabels(xtick_labels, fontsize=9, color="#6B7280")
+    ax.set_xticklabels(xtick_labels, fontsize=10, color="#4B5563", fontweight="bold")
+    
+    # 3. Añadimos el precio marginal exacto en el eje Y
+    ax.set_yticks([precio_marginal])
+    ax.set_yticklabels([f"{precio_marginal:,.2f} €/MWh"], fontsize=11, color="#1E3A8A", fontweight="bold")
 
     plt.tight_layout()
     return fig
