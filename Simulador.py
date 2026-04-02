@@ -323,22 +323,29 @@ if st.session_state.rol == "host":
                 precio_max_visual = precio_mas_alto * 1.15 if precio_mas_alto > 0 else 200
 
                 # Construimos las barritas de tecnologías convencionales
-                html_barras = ""
-                for _, r in df_graf.iterrows():
-                    tech = r['Tecnología']
-                    cfg = TECH_CONFIG_GRAFICA.get(tech, {"icon": "⚡", "color": "#e5e7eb", "color_borde": "#6b7280", "texto_borde": "#374151"})
-                    potencia = r["Potencia Ofertada (MW)"]
-                    precio = r["Precio (€/MWh)"]
-                    asignada = r["Potencia Asignada (MW)"]
-
-                    # Altura de la barra proporcional al precio
-                    pct_altura = min((precio / precio_max_visual) * 100, 100)
-                    # Ancho proporcional a la potencia
-                    pct_ancho = (potencia / potencia_total_graf) * 100
-
-                    # Borde más grueso si es la barra marginal (la que fija el precio)
-                    es_marginal = abs(precio - precio_cierre) < 0.01 and asignada > 0
-                    borde_extra = f"box-shadow: 0 0 0 3px #ea580c; z-index: 5;" if es_marginal else ""
+               html_barras = ""
+for _, r in df_graf.iterrows():
+    tech = r['Tecnología']
+    cfg = TECH_CONFIG_GRAFICA.get(tech, {"icon": "⚡", "color": "#e5e7eb", "color_borde": "#6b7280", "texto_borde": "#374151"})
+    potencia = r["Potencia Ofertada (MW)"]
+    precio = r["Precio (€/MWh)"]
+    asignada = r["Potencia Asignada (MW)"]
+    pct_altura = min((precio / precio_max_visual) * 100, 100)
+    pct_ancho = (potencia / potencia_total_graf) * 100
+    es_marginal = abs(precio - precio_cierre) < 0.01 and asignada > 0
+    borde_extra = "box-shadow: 0 0 0 3px #ea580c; z-index: 5;" if es_marginal else ""
+    html_barras = ""
+for _, r in df_graf.iterrows():
+    tech = r['Tecnología']
+    cfg = TECH_CONFIG_GRAFICA.get(tech, {"icon": "⚡", "color": "#e5e7eb", "color_borde": "#6b7280", "texto_borde": "#374151"})
+    potencia = r["Potencia Ofertada (MW)"]
+    precio = r["Precio (€/MWh)"]
+    asignada = r["Potencia Asignada (MW)"]
+    pct_altura = min((precio / precio_max_visual) * 100, 100)
+    pct_ancho = (potencia / potencia_total_graf) * 100
+    es_marginal = abs(precio - precio_cierre) < 0.01 and asignada > 0
+    borde_extra = "box-shadow: 0 0 0 3px #ea580c; z-index: 5;" if es_marginal else ""
+    html_barras += f"<div style='position:relative;width:{pct_ancho:.2f}%;height:{pct_altura:.2f}%;background-color:{cfg['color']};border:2px solid {cfg['color_borde']};border-bottom:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:4px;box-sizing:border-box;{borde_extra}'><span style='font-size:1.3rem;'>{cfg['icon']}</span><span style='font-size:0.7rem;font-weight:bold;color:{cfg['color_borde']};text-align:center;line-height:1.1;'>{precio:,.0f}€<br/>{potencia:,.0f}MW</span></div>"
 
                     html_barras += f"""
                     <div style="
@@ -366,26 +373,7 @@ if st.session_state.rol == "host":
                 # Barra de renovables (va primero, más a la izquierda, precio = 0)
                 pct_ancho_reno = (renovables_mw / potencia_total_graf) * 100
                 cfg_reno = TECH_CONFIG_GRAFICA["Renovables"]
-                html_barra_reno = f"""
-                <div style="
-                    width: {pct_ancho_reno:.2f}%;
-                    height: 15%;
-                    background-color: {cfg_reno['color']};
-                    border: 2px solid {cfg_reno['color_borde']};
-                    border-bottom: none;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: flex-start;
-                    padding-top: 4px;
-                    box-sizing: border-box;
-                ">
-                    <span style="font-size: 1.3rem;">{cfg_reno['icon']}</span>
-                    <span style="font-size: 0.7rem; font-weight: bold; color: {cfg_reno['color_borde']}; text-align:center; line-height:1.1;">
-                        0€<br/>{renovables_mw:,.0f}MW
-                    </span>
-                </div>
-                """
+                html_barra_reno = f"<div style='width:{pct_ancho_reno:.2f}%;height:15%;background-color:{cfg_reno['color']};border:2px solid {cfg_reno['color_borde']};border-bottom:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding-top:4px;box-sizing:border-box;'><span style='font-size:1.3rem;'>{cfg_reno['icon']}</span><span style='font-size:0.7rem;font-weight:bold;color:{cfg_reno['color_borde']};text-align:center;line-height:1.1;'>0€<br/>{renovables_mw:,.0f}MW</span></div>"
 
                 # Línea del precio marginal: en % de altura
                 pct_linea = min((precio_cierre / precio_max_visual) * 100, 99)
