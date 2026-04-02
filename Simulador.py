@@ -37,9 +37,24 @@ def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
     df_sorted = df_resultado.sort_values("Precio (€/MWh)").reset_index(drop=True)
     df_sorted = df_sorted[df_sorted["Potencia Ofertada (MW)"] > 0]
 
-    total_ofertado   = df_sorted["Potencia Ofertada (MW)"].sum()
-    max_price_display = max(precio_marginal * 1.45, df_sorted["Precio (€/MWh)"].max() * 1.2)
+    # --- PARCHE DE SEGURIDAD: Si la gente oferta 0 MW ---
+    if df_sorted.empty:
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.text(0.5, 0.5, "Nadie ofertó potencia.\nMercado desierto.", ha='center', va='center', fontsize=15, color="red")
+        ax.axis('off')
+        return fig
 
+    total_ofertado   = df_sorted["Potencia Ofertada (MW)"].sum()
+    
+    # --- PARCHE DE SEGURIDAD: Evitar errores de max() con NaN ---
+    max_precio_ofertado = df_sorted["Precio (€/MWh)"].max()
+    if pd.isna(max_precio_ofertado):
+        max_precio_ofertado = 0
+        
+    max_price_display = max(precio_marginal * 1.45, max_precio_ofertado * 1.2)
+    if max_price_display <= 0:
+        max_price_display = 100 # Límite Y por defecto para que no rompa
+    
     fig, ax = plt.subplots(figsize=(10, 5))
     fig.patch.set_facecolor("#FFFFFF")
     ax.set_facecolor("#FFFFFF")
@@ -383,9 +398,22 @@ if st.session_state.rol == "host":
 
         # FASE: RESULTADOS GLOBALES (HOST)
         elif sala["fase"] == "resultados":
+            
+
+            datos_hora_res  = HORARIOS[ronda]
+            demanda_res_now = datos_hora_res["demanda"] - datos_hora_res["renovables"]
+            df_res = pd.DataFrame(sala["resultados_df"])
+            fig_merit = grafico_merit_order(df_res, demanda_res_now, sala["precio_marginal"])
+            # --------------------------------------------------------
+
             if sala["hubo_apagon"]:
                 st.markdown("<h1 style='text-align: center; color: #ff0000; font-size: 4em;'>🚨 ¡ALERTA APAGÓN! 🚨</h1>", unsafe_allow_html=True)
                 st.error("El sistema eléctrico está al borde del colapso. El mercado ha sido anulado.")
+                
+                # LA MOSTRAMOS TAMBIÉN DURANTE EL APAGÓN
+                st.pyplot(fig_merit)
+                plt.close(fig_merit)
+                
                 if st.button("🔄 Obligar a rehacer Ofertas", type="primary"):
                     sala["fase"] = "ofertando"
                     sala["ofertas"] = {}
@@ -394,20 +422,13 @@ if st.session_state.rol == "host":
             else:
                 st.success(f"### 💰 Precio Final del Mercado: {sala['precio_marginal']:,.2f} €/MWh")
 
-                # ── GRÁFICA MERIT ORDER ──────────────────────────────────────────
-                datos_hora_res  = HORARIOS[ronda]
-                demanda_res_now = datos_hora_res["demanda"] - datos_hora_res["renovables"]
-                df_res = pd.DataFrame(sala["resultados_df"])
-                fig_merit = grafico_merit_order(df_res, demanda_res_now, sala["precio_marginal"])
+                # LA MOSTRAMOS CUANDO TODO VA BIEN
                 st.pyplot(fig_merit)
                 plt.close(fig_merit)
-                # ─────────────────────────────────────────────────────────────────
-                
                 
                 # Resumen de beneficios para el profe
                 df_res = pd.DataFrame(sala["resultados_df"])
                 resumen = df_res.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
-                # Lo pasamos por style para ocultar los números laterales y lo hacemos tabla fija
                 st.table(resumen.style.hide(axis="index"))
                 
                 if st.button("⏭️ Avanzar a la Siguiente Hora", type="primary", use_container_width=True):
