@@ -3,6 +3,7 @@ import pandas as pd
 import qrcode
 import random
 from streamlit_autorefresh import st_autorefresh
+import streamlit.components.v1 as components
 
 # streamlit run SimuladorEquipos.py
 
@@ -221,7 +222,7 @@ if st.session_state.rol == "host":
 """
 
         # Y el st.markdown también lleva su sangría para no romper Python
-        st.markdown(html_visual, unsafe_allow_html=True)
+        components.html(html_grafica_completa, height=450)
         
         # FASE: OFERTANDO (HOST ESPERA)
         if sala["fase"] == "ofertando":
