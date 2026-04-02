@@ -310,7 +310,7 @@ if st.session_state.rol == "host":
                     df_res = pd.DataFrame(sala["resultados_df"])
     
                     # Todas las ofertas ordenadas por precio (orden de mérito completo)
-                    df_graf = df_res.sort_values(by="Precio (€/MWh)").reset_index(drop=True)
+                    df_graf = df_res[df_res["Potencia Ofertada (MW)"] > 0].sort_values(by="Precio (€/MWh)").reset_index(drop=True)
     
                     # Calculamos la potencia total despachada para escalar el gráfico
                     potencia_total_graf = df_graf["Potencia Ofertada (MW)"].sum()
@@ -318,7 +318,8 @@ if st.session_state.rol == "host":
                     potencia_total_graf += renovables_mw  # incluimos renovables en el ancho total
     
                     # Altura máxima = precio marginal * 1.25 para que haya margen arriba
-                    precio_max_visual = precio_cierre * 1.3 if precio_cierre > 0 else 100
+                    precio_mas_alto = df_graf["Precio (€/MWh)"].max()
+                    precio_max_visual = precio_mas_alto * 1.15 if precio_mas_alto > 0 else 200
     
                     # Construimos las barritas de tecnologías convencionales
                     html_barras = ""
