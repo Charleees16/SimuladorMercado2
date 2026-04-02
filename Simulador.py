@@ -6,6 +6,7 @@ from streamlit_autorefresh import st_autorefresh
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
+import matplotlib.ticker as ticker # Necesario para los ejes numéricos
 
 # streamlit run SimuladorEquipos.py
 
@@ -30,17 +31,17 @@ def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
     # 4. Mapeo exacto de los emojis que pediste
     DICT_NOMBRES_EMOJIS = {
         "Nuclear": "☢️ Nuclear",
-        "Carbón": "🪨 Carbón",
-        "Ciclo Combinado": "💨 Ciclo",
+        "Carbón": "⚫ Carbón",
+        "Ciclo Combinado": "☁️ Ciclo",
         "Gas": "🔥 Gas"
     }
     
     # Colores actualizados para los nuevos nombres
     COLORES_TECH = {
-        "☢️ Nuclear": "#F5B731",
-        "🪨 Carbón":  "#57534E",
-        "💨 Ciclo":   "#A8A29E",
-        "🔥 Gas":     "#D6D3D1",
+        "☢️ Nuclear": "#62ff3b",
+        "⚫ Carbón":  "#4e4859",
+        "☁️ Ciclo":   "#322fc4",
+        "🔥 Gas":     "#f7b10c",
     }
 
     df_sorted = df_resultado.sort_values("Precio (€/MWh)").reset_index(drop=True)
@@ -62,31 +63,36 @@ def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
     if pd.isna(max_precio_ofertado):
         max_precio_ofertado = 0
         
-    max_price_display = max(precio_marginal * 1.45, max_precio_ofertado * 1.2)
-    if max_price_display <= 0:
-        max_price_display = 100 
+    # Límite Y para el gráfico
+    max_price_display = max(180, precio_marginal * 1.3, max_precio_ofertado * 1.1)
+    
+    # Definimos colores discretos para las marcas numéricas
+    COLOR_EJES = "#7c7c7c" # Gris discreto
+    COLOR_GRID = "#e8e8e8" # Gris muy claro para la cuadrícula
     
     fig, ax = plt.subplots(figsize=(10, 5))
     fig.patch.set_facecolor("#FFFFFF")
     ax.set_facecolor("#FFFFFF")
 
     cumulative   = 0
-    tech_ranges  = {}
+    # Guardaremos info para las etiquetas de texto de tecnologías
+    # (x_center, tech_name, price)
+    tech_regions = [] 
 
     for _, row in df_sorted.iterrows():
         tech   = row["Tecnología"]
         mw     = row["Potencia Ofertada (MW)"]
         price  = row["Precio (€/MWh)"]
 
+        # Calculamos la posición X en porcentaje de la Demanda Residual
         x_start = (cumulative / demanda_residual) * 100
         x_width = (mw          / demanda_residual) * 100
 
-        # 2. Lógica de colores: si empieza antes del 100%, se colorea (incluye la marginal).
-        # Si empieza en el 100% o más tarde, se queda en gris claro (descartadas).
+        # 2. Lógica de colores basada en si el bloque empieza ANTES del 100%
         if x_start < 100:
             color = COLORES_TECH.get(tech, "#F5B731")
         else:
-            color = "#F3F4F6" # Gris muy claro para las ofertas no casadas
+            color = "#f3f3f3" # Gris muy claro para ofertas descartadas
 
         rect = plt.Rectangle(
             (x_start, 0), x_width, price,
@@ -94,58 +100,76 @@ def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
         )
         ax.add_patch(rect)
 
-        tech_ranges.setdefault(tech, []).append((x_start, x_start + x_width))
+        # Info para la etiqueta de texto central del bloque
+        tech_regions.append(((x_start + x_start + x_width) / 2, tech, price))
         cumulative += mw
 
-    # ── Área amarilla ──────────────────────────────────────────────────────────
-    demand_pct = min((cumulative / demanda_residual) * 100, 100)
+    # ── Área amarilla de cobertura de Demanda ────────────────────────────────────
     ax.fill_between([0, 100], 0, precio_marginal,
-                    color="#FEFCE8", alpha=0.85, zorder=0)
+                    color="#FEFCE8", alpha=0.9, zorder=0)
 
-    # ── Líneas punteadas del precio marginal ───────────────────────────────────
+    # ── Líneas punteadas del precio marginal ──────────────────────────────────
     ax.hlines(precio_marginal, 0, 100,
-              colors="#1E3A8A", linestyles="--", linewidth=1.6, zorder=4)
+              colors="#1E3A8A", linestyles="--", linewidth=1.8, zorder=4)
     ax.vlines(100, 0, precio_marginal,
-              colors="#1E3A8A", linestyles="--", linewidth=1.6, zorder=4)
+              colors="#1E3A8A", linestyles="--", linewidth=1.8, zorder=4)
 
-    # ── Punto azul en la intersección ─────────────────────────────────────────
+    # ── Punto rojo en la intersección (User pidió: #fc0303) ───────────────────
     ax.plot(100, precio_marginal, "o",
-            color="#1E3A8A", markersize=9, zorder=5)
+            color="#fc0303", markersize=9, zorder=5)
 
-    # 1. ELIMINADA la anotación con flecha y texto largo para una gráfica limpia
-
-    # ── Ejes ──────────────────────────────────────────────────────────────────
-    x_max_data = max((total_ofertado / demanda_residual) * 100, 100) * 1.1 # Reducido un poco el espacio derecho al quitar el texto
-    ax.set_xlim(-3, x_max_data)
-    ax.set_ylim(0, max_price_display)
-
+    # 2. ELIMINADA EL TEXTO SOLAPADO: Borrada la línea xtick_labels.append("100%\n(Demanda)")
+    
+    # ── Estilo DISCRETO de los Ejes ──────────────────────────────────────────
+    # Ocultar spines (líneas de contorno)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#E5E7EB")
-    ax.spines["bottom"].set_color("#E5E7EB")
-    ax.tick_params(colors="#4B5563", length=4)
-
-    # ── Etiquetas de tecnología y Porcentajes en X ────────────────────────────
-    xtick_pos, xtick_labels = [], []
-    for tech, ranges in tech_ranges.items():
-        center = (min(r[0] for r in ranges) + max(r[1] for r in ranges)) / 2
-        xtick_pos.append(center)
-        xtick_labels.append(tech)
-
-    # 3. Añadimos el 100% explícitamente en el eje X
-    xtick_pos.append(100)
-    xtick_labels.append("100%\n(Demanda)")
-
-    ax.set_xticks(xtick_pos)
-    ax.set_xticklabels(xtick_labels, fontsize=10, color="#4B5563", fontweight="bold")
+    # ax.spines["left"].set_visible(False) # Si los quieres ocultos del todo
+    # ax.spines["bottom"].set_visible(False) # Si los quieres ocultos del todo
     
-    # 3. Añadimos el precio marginal exacto en el eje Y
-    ax.set_yticks([precio_marginal])
-    ax.set_yticklabels([f"{precio_marginal:,.2f} €/MWh"], fontsize=11, color="#1E3A8A", fontweight="bold")
+    # Colorear spines que quedan visibles
+    ax.spines["left"].set_color(COLOR_EJES)
+    ax.spines["bottom"].set_color(COLOR_EJES)
+    ax.tick_params(colors=COLOR_EJES, length=5, width=0.8, labelsize=10)
+    
+    # Configurar cuadrícula de fondo tenue y discreta
+    ax.grid(axis='y', linestyle='-', color=COLOR_GRID, linewidth=0.6, zorder=1)
+
+    # 3. NÚMEROS DISCRETOS Y ORDENADOS EN LOS EJES ──────────────────────────────────
+    x_limit = max(110, (total_ofertado / demanda_residual) * 100)
+    ax.set_xlim(-2, x_limit)
+    ax.set_ylim(0, max_price_display)
+
+    # Eje X: Marcas numéricas de porcentaje discreto (cada 50%)
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(50))
+    # Eje X: Marcas pequeñas (cada 25%) sin texto (solo ticks)
+    ax.xaxis.set_minor_locator(ticker.MultipleLocator(25))
+    ax.xaxis.set_major_formatter(ticker.PercentFormatter()) # Formatea como "%"
+    
+    # Eje Y: Marcas numéricas discretas de precio (cada 50€)
+    ax.yaxis.set_major_locator(ticker.MultipleLocator(50))
+    ax.yaxis.set_major_formatter(ticker.FormatStrFormatter('%d€')) # Formatea como "€"
+
+    # Etiquetas de tecnología y Porcentajes en X ────────────────────────────
+    # Añadimos los nombres de las tecnologías directamente COMO TEXTO encima del eje bottom, 
+    # para que no choquen con las marcas numéricas de porcentaje que están abajo.
+    for pos_x, tech_name, price in tech_regions:
+        # Solo dibujamos texto si el bloque es lo suficientemente ancho
+        if pos_x < x_limit:
+            # Texto rotado para ahorrar espacio, ligeramente tenue, encima del eje bottom
+            ax.text(pos_x, - (max_price_display * 0.01) , tech_name, 
+                    fontsize=10, color="#6B7280", rotation=0, 
+                    ha='center', va='top', fontweight="normal", zorder=6)
+    
+    # Añadimos un pequeño indicador discreto del Precio Marginal en el gráfico
+    # encima de la línea punteada para dar contexto
+    ax.text(102, precio_marginal + (max_price_display * 0.01), f"Marginal\n{precio_marginal:,.2f} €", 
+            fontsize=9, color="#1E3A8A", ha='left', va='bottom', fontweight="bold", zorder=6)
 
     plt.tight_layout()
+    # plt.show() # Para testear localmente
     return fig
-
+    
 # --- ENRUTADOR MÁGICO ---
 params = st.query_params
 sala_url = params.get("sala", None)
