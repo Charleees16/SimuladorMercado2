@@ -302,7 +302,7 @@ if st.session_state.rol == "host":
                     sala["ofertas"] = {}
                     sala["hubo_apagon"] = False
                     st.rerun()
-else:
+        else:
                 st.success(f"### 💰 Mercado Casado Correctamente")
                 
                 df_res_bruto = pd.DataFrame(sala["resultados_df"])
