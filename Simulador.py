@@ -302,25 +302,18 @@ if st.session_state.rol == "host":
                     sala["ofertas"] = {}
                     sala["hubo_apagon"] = False
                     st.rerun()
-            else:
+else:
                 st.success(f"### 💰 Mercado Casado Correctamente")
                 
-                # Resumen de beneficios para el profe (para que siga saliendo en pequeñito)
                 df_res_bruto = pd.DataFrame(sala["resultados_df"])
                 resumen_profe = df_res_bruto.groupby("Equipo")["Beneficio Neto (€)"].sum().reset_index()
                 
-                # --- AQUÍ EMPIEZA LA PELEA DE LA GRÁFICA GÉMINIS ---
-                
                 precio_cierre = sala['precio_marginal']
                 
-                # 1. Preparar datos para la curva de oferta
-                # Cogemos las ofertas, ordenamos por precio y filtramos las que vendieron algo
                 df_ofertas_exito = pd.DataFrame(sala["resultados_df"])
                 df_ofertas_exito = df_ofertas_exito[df_ofertas_exito["Potencia Asignada (MW)"] > 0]
-                # Asegurarnos del orden de mérito
                 df_ofertas_exito = df_ofertas_exito.sort_values(by="Precio (€/MWh)").reset_index(drop=True)
                 
-                # 2. Generar el HTML para las barritas visuales
                 html_ofertas = ""
                 demanda_acumulada = 0
                 
@@ -335,71 +328,51 @@ if st.session_state.rol == "host":
                     potencia = r["Potencia Ofertada (MW)"]
                     demanda_acumulada += potencia
                     
-                    # Estilo de la barrita visual
-                    s_oferta = f"""
-                        display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
-                        height: 100%; border: 1px solid {color_borde_tech}; border-bottom: 0; background-color: {color_fondo_tech}; 
-                        flex-grow: {potencia}; margin: 0 1px; color: {color_texto_borde}; font-size: 0.8rem; font-weight: bold;
-                    """
+                    s_oferta = f"display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; border: 1px solid {color_borde_tech}; border-bottom: 0; background-color: {color_fondo_tech}; flex-grow: {potencia}; margin: 0 1px; color: {color_texto_borde}; font-size: 0.8rem; font-weight: bold;"
+                    s_txt = "text-align: center; margin: 0; padding: 2px 0;"
+                    s_em = "font-size: 1.2rem; display: block;"
                     
-                    # Estilo del precio dentro de la barrita
-                    s_txt = f"text-align: center; margin: 0; padding: 2px 0;"
-                    s_em = f"font-size: 1.2rem; display: block;"
-                    
+                    # HTML de ofertas corregido (sin espacios al inicio)
                     html_ofertas += f"""
-                    <div style="{s_oferta}">
-                        <div style="{s_txt}">
-                            <span style="{s_em}">{emoji_tech}</span>
-                            {r['Precio (€/MWh)']:,.1f}<br/>
-                            ({potencia:,.0f} MW)
-                        </div>
-                    </div>
-                    """
+<div style="{s_oferta}">
+<div style="{s_txt}">
+<span style="{s_em}">{emoji_tech}</span>
+{r['Precio (€/MWh)']:,.1f}<br/>
+({potencia:,.0f} MW)
+</div>
+</div>
+"""
                 
-                # 3. Datos de Renovables 🌱
                 renovables_mw = datos_hora["renovables"]
                 c_reno = TECH_CONFIG_GRAFICA["Renovables (🌱/💨)"]
-                
-                # Calculamos el % de barrita para renovables
                 pct_reno = (renovables_mw / demanda_acumulada) * 100 if demanda_acumulada > 0 else 0
                 
-                # 4. Generar el DASHBOARD visual
+                # HTML dashboard corregido (sin espacios al inicio)
                 html_dashboard_host = f"""
 <div style="background-color: #030712; padding: 30px; border-radius: 15px; border: 2px solid #374151; margin-bottom: 20px; color: white;">
-    
-    <h2 style="margin: 0 0 5px 0; color: #f3f4f6;">📊 Informe de Cierre: Ronda {ronda+1}</h2>
-    <p style="margin: 0 0 20px 0; color: #9ca3af; line-height: 1.4; font-size: 1.1rem;">
-    El precio se ha fijado en <b>{precio_cierre:,.2f} €/MWh</b> porque ha sido la oferta más cara necesaria para cubrir la demanda residual. 
-    A este precio, <b>todas</b> las empresas cobran {precio_cierre:,.2f} €/MWh por cada MW vendido, independientemente de su oferta original.
-    Así funciona el orden de mérito: las barritas más baratas venden primero.
-    </p>
-
-    <div style="display: flex; align-items: flex-end; height: 350px; border-left: 3px solid white; border-bottom: 3px solid white; position: relative; margin-bottom: 10px; padding-left: 5px;">
-        
-        <div style="position: absolute; bottom: 0; left: 0; height: 100%; border-left: 2px dashed #f59e0b;"></div>
-        
-        <div style="position: absolute; bottom: calc(100% * 0.9); left: 0; width: 100%; border-bottom: 3px dotted #ea580c; z-index: 10;"></div>
-        
-        <div style="position: absolute; bottom: calc(100% * 0.9 + 5px); right: 20px; background-color: #ea580c; color: white; padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 0.9rem; z-index: 10;">
-            💰 Precio Marginal: {precio_cierre:,.2f} €
-        </div>
-
-        <div style="position: absolute; top: 10px; right: 20px; width: 250px; background-color: #1f2937; color: #d1d5db; padding: 10px; border-radius: 10px; font-size: 0.9rem; line-height: 1.3; text-align: right; border: 1px dashed #4b5563;">
-        Pero el precio de la electricidad no es el que ofrece cada central eléctrica, sino que se fija en el precio que haya ofrecido la más cara de ellas en último lugar. 💰
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: center; height: calc(100% * 0.9); width: {pct_reno}%; border: 1px solid {c_reno['color_borde']}; background-color: {c_reno['color']}; color: {c_reno['texto_borde']}; font-weight: bold; margin: 0 1px; font-size: 1.1rem; border-bottom: 0;">
-            🌱 {renovables_mw:,.0f} MW
-        </div>
-        
-        {html_ofertas}
-        
-    </div>
-    
-    <p style="text-align: right; font-size: 0.9rem; color: #6b7280; margin: 10px 0 0 0;">
-    Si la demanda es alta, otras centrales (nuclear o gas) pueden vender electricidad a un precio más elevado.
-    </p>
-
+<h2 style="margin: 0 0 5px 0; color: #f3f4f6;">📊 Informe de Cierre: Ronda {ronda+1}</h2>
+<p style="margin: 0 0 20px 0; color: #9ca3af; line-height: 1.4; font-size: 1.1rem;">
+El precio se ha fijado en <b>{precio_cierre:,.2f} €/MWh</b> porque ha sido la oferta más cara necesaria para cubrir la demanda residual. 
+A este precio, <b>todas</b> las empresas cobran {precio_cierre:,.2f} €/MWh por cada MW vendido, independientemente de su oferta original.
+Así funciona el orden de mérito: las barritas más baratas venden primero.
+</p>
+<div style="display: flex; align-items: flex-end; height: 350px; border-left: 3px solid white; border-bottom: 3px solid white; position: relative; margin-bottom: 10px; padding-left: 5px;">
+<div style="position: absolute; bottom: 0; left: 0; height: 100%; border-left: 2px dashed #f59e0b;"></div>
+<div style="position: absolute; bottom: calc(100% * 0.9); left: 0; width: 100%; border-bottom: 3px dotted #ea580c; z-index: 10;"></div>
+<div style="position: absolute; bottom: calc(100% * 0.9 + 5px); right: 20px; background-color: #ea580c; color: white; padding: 3px 8px; border-radius: 5px; font-weight: bold; font-size: 0.9rem; z-index: 10;">
+💰 Precio Marginal: {precio_cierre:,.2f} €
+</div>
+<div style="position: absolute; top: 10px; right: 20px; width: 250px; background-color: #1f2937; color: #d1d5db; padding: 10px; border-radius: 10px; font-size: 0.9rem; line-height: 1.3; text-align: right; border: 1px dashed #4b5563;">
+Pero el precio de la electricidad no es el que ofrece cada central eléctrica, sino que se fija en el precio que haya ofrecido la más cara de ellas en último lugar. 💰
+</div>
+<div style="display: flex; align-items: center; justify-content: center; height: calc(100% * 0.9); width: {pct_reno}%; border: 1px solid {c_reno['color_borde']}; background-color: {c_reno['color']}; color: {c_reno['texto_borde']}; font-weight: bold; margin: 0 1px; font-size: 1.1rem; border-bottom: 0;">
+🌱 {renovables_mw:,.0f} MW
+</div>
+{html_ofertas}
+</div>
+<p style="text-align: right; font-size: 0.9rem; color: #6b7280; margin: 10px 0 0 0;">
+Si la demanda es alta, otras centrales (nuclear o gas) pueden vender electricidad a un precio más elevado.
+</p>
 </div>
 """
                 st.markdown(html_dashboard_host, unsafe_allow_html=True)
