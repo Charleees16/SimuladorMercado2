@@ -222,7 +222,7 @@ if st.session_state.rol == "host":
 """
 
         # Y el st.markdown también lleva su sangría para no romper Python
-        components.html(html_grafica_completa, height=450)
+        st.markdown(html_visual, unsafe_allow_html=True)
         
         # FASE: OFERTANDO (HOST ESPERA)
         if sala["fase"] == "ofertando":
