@@ -116,7 +116,7 @@ def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
     ax.grid(axis='y', linestyle='-', color=COLOR_GRID, linewidth=0.5, zorder=1)
 
     # --- Indicador de Precio Marginal ---
-    ax.text(101, precio_marginal + (max_price_display * 0.02), f"Marginal: {precio_marginal:,.2f} €", 
+    ax.text(101, precio_marginal + (max_price_display * 0.02), f"{precio_marginal:,.2f} €", 
             fontsize=10, color="#1E3A8A", ha='left', va='bottom', fontweight="bold", zorder=6)
 
     # --- LEYENDA (La clave de la limpieza) ---
