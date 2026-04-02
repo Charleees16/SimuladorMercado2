@@ -30,17 +30,17 @@ HORARIOS = [
 def grafico_merit_order(df_resultado, demanda_residual, precio_marginal):
     # 1. Diccionarios actualizados con nuevos iconos y colores
     DICT_NOMBRES_EMOJIS = {
-        "Nuclear": "⚛️ Nuclear",
-        "Carbón": "⚫ Carbón",
-        "Ciclo Combinado": "🌀 Ciclo",
-        "Gas": "💨 Gas"  # Icono de gas/vapor que renderiza mejor
+        "Nuclear": "Nuclear⚛️ ",
+        "Carbón": "Carbón ⚫",
+        "Ciclo Combinado": "Ciclo ☁",
+        "Gas": "Gas ♨"  # Icono de gas/vapor que renderiza mejor
     }
     
     COLORES_TECH = {
-        "⚛️ Nuclear": "#62ff3b", # Verde
-        "⚫ Carbón":  "#4e4859", # Gris Oscuro
-        "🌀 Ciclo":   "#322fc4", # Azul
-        "💨 Gas":     "#f7b10c", # Naranja Suave
+        "Nuclear ⚛️": "#62ff3b", # Verde
+        "Carbón ⚫":  "#4e4859", # Gris Oscuro
+        "Ciclo ☁":   "#322fc4", # Azul
+        "Gas ♨":     "#f7b10c", # Naranja Suave
     }
 
     df_sorted = df_resultado.sort_values("Precio (€/MWh)").reset_index(drop=True)
